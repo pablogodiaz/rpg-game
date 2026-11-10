@@ -32,7 +32,10 @@ namespace ReadyCheck
         public float Remaining => Mathf.Max(0f, ReadyAt - Time.time);
 
         protected EncounterManager Enc => EncounterManager.Instance;
-        protected RotgutBoss Boss => Enc != null ? Enc.Boss : null;
+        protected BossController Boss => Enc != null ? Enc.Boss : null;
+        /// <summary>What offensive abilities hit: the member's current attack target (focus, rescue or boss).</summary>
+        protected Unit Target => Owner.AttackTarget;
+        protected float DistToTargetEdge => Target != null ? Owner.DistanceToEdge(Target) : float.MaxValue;
         protected Unit Me => Owner.Unit;
 
         public void Bind(PartyMember owner) => Owner = owner;
@@ -70,6 +73,15 @@ namespace ReadyCheck
         // ----- Helpers for subclasses --------------------------------------------------------------
 
         protected float DistToBossEdge => Owner.DistanceToBossEdge(Boss);
+
+        /// <summary>Every living enemy unit: the boss and any extra targets (arms).</summary>
+        protected IEnumerable<Unit> LivingEnemies()
+        {
+            if (Boss == null) yield break;
+            if (!Boss.Unit.IsDead) yield return Boss.Unit;
+            foreach (var u in Boss.ExtraTargets)
+                if (u != null && !u.IsDead) yield return u;
+        }
 
         protected IEnumerable<PartyMember> LivingParty()
         {

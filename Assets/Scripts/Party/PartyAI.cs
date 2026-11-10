@@ -6,7 +6,8 @@ namespace ReadyCheck
 
     /// <summary>
     /// AI for party members. Priority stack:
-    ///   standing-in-fire reflex  >  Leader Call / self-response order  >  role default behaviour.
+    ///   dodge danger zones / leave puddles  >  Leader Call / self-response order  >  role default behaviour.
+    /// Damage dealers also pick targets: their own rescue target  >  the leader's FOCUS  >  the boss.
     ///
     /// Two stats control how much the leader has to call:
     ///  - Awareness (per member): reaction speed, and the chance to handle a mechanic without a call.
@@ -23,7 +24,44 @@ namespace ReadyCheck
         float orderEndsAt;
 
         float fireReactAt = -1f;
+        float dangerReactAt = -1f;
         float nextBackseatBark;
+
+        Unit rescueTarget;
+        float rescueUntil;
+        float armHuntUntil;
+
+        bool IsDamageDealer => m.Profile.Role == Role.Melee || m.Profile.Role == Role.Ranged;
+
+        /// <summary>A target this member chose on their own (freeing a hugged friend, breaking arms in a frenzy).</summary>
+        public Unit PersonalTarget
+        {
+            get
+            {
+                if (rescueTarget != null && !rescueTarget.IsDead && Time.time < rescueUntil) return rescueTarget;
+                if (Time.time < armHuntUntil) return NearestExtraTarget();
+                return null;
+            }
+        }
+
+        Unit NearestExtraTarget()
+        {
+            var boss = EncounterManager.Instance != null ? EncounterManager.Instance.Boss : null;
+            if (boss == null) return null;
+            Unit best = null;
+            float bestDist = float.MaxValue;
+            foreach (var u in boss.ExtraTargets)
+            {
+                if (u == null || u.IsDead) continue;
+                float d = Vector3.Distance(u.Position, m.Unit.Position);
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = u;
+                }
+            }
+            return best;
+        }
 
         void Awake()
         {
@@ -59,6 +97,11 @@ namespace ReadyCheck
 
         float SelfReactionDelay =>
             Mathf.Max(0.4f, Mathf.Lerp(2.2f, 0.5f, m.Profile.Awareness) - m.Familiarity * 0.1f);
+
+        /// <summary>How long it takes to notice a danger zone. Low awareness sometimes reacts too late.</summary>
+        float DangerReactionDelay =>
+            Mathf.Max(0.2f, Mathf.Lerp(1.4f, 0.25f, m.Profile.Awareness) - m.Familiarity * 0.1f
+                            + Random.Range(0f, 0.9f * (1f - m.Profile.Awareness)));
 
         float FireReactionDelay
         {
@@ -124,11 +167,27 @@ namespace ReadyCheck
                     BarkKnown();
                     break;
                 }
-                case MechanicKind.SecondBreakfast:
+                case MechanicKind.InterruptibleCast:
                 {
                     if (!m.Profile.CanInterrupt || !m.CanInterruptNow || !knows) return;
                     float delay = SelfReactionDelay;
                     GiveOrder(OrderKind.Interrupt, e.ResolveAt - Time.time, delay);
+                    break;
+                }
+                case MechanicKind.ArmGrab:
+                {
+                    if (!IsDamageDealer || e.Target == m.Unit || !knows) return;
+                    rescueTarget = e.Source;
+                    rescueUntil = e.ResolveAt;
+                    if (Random.value < 0.6f && e.Target != null)
+                        Barks.Say(m.Unit, string.Format(BarkLines.Pick(BarkLines.Rescue), e.Target.DisplayName), 2f);
+                    break;
+                }
+                case MechanicKind.Frenzy:
+                {
+                    if (!IsDamageDealer || !knows) return;
+                    armHuntUntil = e.ResolveAt;
+                    BarkKnown();
                     break;
                 }
             }
@@ -150,6 +209,12 @@ namespace ReadyCheck
             var boss = enc.Boss;
             if (boss == null) return;
             if (m.IsBusy) return; // mid-ability (e.g. Blade Flurry)
+            if (m.IsHeld)
+            {
+                // Being hugged: can't move, but still swings and casts.
+                m.TickCombat(Time.deltaTime);
+                return;
+            }
 
             Vector3 desired = DefaultPosition(boss);
             float stop = 0.25f;
@@ -185,8 +250,29 @@ namespace ReadyCheck
                     break;
             }
 
-            // Standing-in-fire reflex. How fast it kicks in depends on Awareness (and traits).
+            // Danger zones (tentacle slams): step out after a reaction delay based on Awareness.
             bool urgent = CurrentOrder != OrderKind.None;
+            var danger = Telegraph.DangerAt(m.Unit.Position);
+            bool dodging = false;
+            if (danger != null)
+            {
+                if (dangerReactAt < 0f) dangerReactAt = Time.time + DangerReactionDelay;
+                if (Time.time >= dangerReactAt)
+                {
+                    desired = danger.EscapePoint(m.Unit.Position);
+                    stop = 0.05f;
+                    urgent = true;
+                    dodging = true;
+                }
+            }
+            else
+            {
+                dangerReactAt = -1f;
+                var dangerAtDest = Telegraph.DangerAt(desired);
+                if (dangerAtDest != null && CurrentOrder == OrderKind.None) desired = dangerAtDest.EscapePoint(desired);
+            }
+
+            // Standing-in-fire reflex. How fast it kicks in depends on Awareness (and traits).
             var fire = FirePuddle.At(m.Unit.Position, -0.1f);
             if (fire != null)
             {
@@ -196,7 +282,7 @@ namespace ReadyCheck
                     if (m.Profile.Has(Trait.FireEnthusiast) && Random.value < 0.5f)
                         Barks.Say(m.Unit, BarkLines.Pick(BarkLines.FireEnthusiast));
                 }
-                if (Time.time >= fireReactAt)
+                if (Time.time >= fireReactAt && !dodging)
                 {
                     desired = EscapePoint(fire, desired);
                     stop = 0.05f;
@@ -253,11 +339,25 @@ namespace ReadyCheck
         }
 
         /// <summary>Standard raid positioning relative to the boss: tank in front, melee behind, ranged back.</summary>
-        Vector3 DefaultPosition(RotgutBoss boss)
+        Vector3 DefaultPosition(BossController boss)
         {
             var bp = boss.Unit.Position;
             float r = boss.Unit.Radius;
             var facing = boss.FacingDirection;
+
+            // Damage dealers on another target (an arm) go to it.
+            var target = m.AttackTarget;
+            if (IsDamageDealer && target != null && target != boss.Unit)
+            {
+                var away = m.Unit.Position - target.Position;
+                away.y = 0f;
+                if (away.sqrMagnitude < 0.01f) away = Vector3.back;
+                if (m.Profile.Role == Role.Melee)
+                    return Arena.Clamp(target.Position + away.normalized * (target.Radius + 0.7f));
+                if (m.DistanceToEdge(target) > PartyMember.SpellRange - 0.5f)
+                    return Arena.Clamp(target.Position + away.normalized * (target.Radius + PartyMember.SpellRange * 0.7f));
+                return m.Unit.Position; // in range: hold still and cast
+            }
 
             switch (m.Profile.Role)
             {

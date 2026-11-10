@@ -27,6 +27,10 @@ namespace ReadyCheck
         public readonly List<Ability> Abilities = new List<Ability>();
         public Blink Blink { get; private set; }
 
+        /// <summary>Set while something (a Krakenna arm) is holding this member.</summary>
+        public Unit HeldBy { get; set; }
+        public bool IsHeld => HeldBy != null && !HeldBy.IsDead;
+
         public bool IsMoving { get; private set; }
         /// <summary>Locked into an ability animation (e.g. Blade Flurry): no walking or basic attacks.</summary>
         public bool IsBusy => Time.time < busyUntil;
@@ -92,7 +96,8 @@ namespace ReadyCheck
 
         public void Move(Vector3 direction, float speedMultiplier = 1f)
         {
-            if (Unit.IsDead) return;
+            if (Unit.IsDead || IsHeld) return;
+            speedMultiplier *= FirePuddle.SpeedMultiplierAt(Unit.Position);
             direction.y = 0f;
             if (direction.sqrMagnitude > 1f) direction.Normalize();
             var p = transform.position + direction * (MoveSpeed * speedMultiplier * Time.deltaTime);
@@ -102,11 +107,12 @@ namespace ReadyCheck
         /// <summary>Walks toward a point. Returns true once within stopDistance.</summary>
         public bool MoveTowards(Vector3 point, float stopDistance)
         {
+            if (IsHeld) return false;
             var to = point - Unit.Position;
             to.y = 0f;
             float dist = to.magnitude;
             if (dist <= stopDistance) return true;
-            float maxStep = MoveSpeed * Time.deltaTime;
+            float maxStep = MoveSpeed * FirePuddle.SpeedMultiplierAt(Unit.Position) * Time.deltaTime;
             if (maxStep >= dist)
             {
                 transform.position = Arena.Clamp(point);
@@ -136,9 +142,28 @@ namespace ReadyCheck
             return target.TakeDamage(amount, Unit, ability, crit);
         }
 
-        public float DistanceToBossEdge(RotgutBoss boss)
+        public float DistanceToBossEdge(BossController boss) => DistanceToEdge(boss.Unit);
+
+        public float DistanceToEdge(Unit target) => Vector3.Distance(Unit.Position, target.Position) - target.Radius;
+
+        /// <summary>
+        /// Who this member attacks: tanks and healers stay on the boss; damage dealers follow their own rescue
+        /// target (AI), then the leader's FOCUS target, then the boss.
+        /// </summary>
+        public Unit AttackTarget
         {
-            return Vector3.Distance(Unit.Position, boss.Unit.Position) - boss.Unit.Radius;
+            get
+            {
+                var enc = EncounterManager.Instance;
+                var boss = enc != null ? enc.Boss : null;
+                if (boss == null) return null;
+                if (Profile.Role == Role.Tank || Profile.Role == Role.Healer) return boss.Unit;
+                var personal = AI != null ? AI.PersonalTarget : null;
+                if (personal != null && !personal.IsDead) return personal;
+                var focus = enc.FocusTarget;
+                if (focus != null && !focus.IsDead) return focus;
+                return boss.Unit;
+            }
         }
 
         // ----- Basic attacks -----------------------------------------------------------------------
@@ -150,19 +175,21 @@ namespace ReadyCheck
             if (enc == null || enc.State != EncounterState.Fighting || Unit.IsDead || IsBusy) return;
             var boss = enc.Boss;
             if (boss == null || boss.Unit.IsDead) return;
-            float dist = DistanceToBossEdge(boss);
+            var target = AttackTarget;
+            if (target == null || target.IsDead) return;
+            float dist = DistanceToEdge(target);
 
             switch (Profile.Role)
             {
                 case Role.Tank:
-                    Swing(dt, boss, dist, 26f, 1.1f, "Shield Bash", new Color(0.9f, 0.92f, 1f));
+                    Swing(dt, target, dist, 26f, 1.1f, "Shield Bash", new Color(0.9f, 0.92f, 1f));
                     break;
                 case Role.Melee:
-                    Swing(dt, boss, dist, 32f, 0.65f, "Stab", new Color(1f, 0.55f, 0.5f));
+                    Swing(dt, target, dist, 32f, 0.65f, "Stab", new Color(1f, 0.55f, 0.5f));
                     break;
                 case Role.Ranged:
                     Cast(dt, "Fireball", 1.2f, dist <= SpellRange,
-                        () => FireAt(boss.Unit, 52f, new Color(1f, 0.55f, 0.2f), "Fireball", 1.3f, 0.7f));
+                        () => FireAt(target, 52f, new Color(1f, 0.55f, 0.2f), "Fireball", 1.3f, 0.7f));
                     break;
                 case Role.Healer:
                     HealerTick(dt, boss, dist);
@@ -170,15 +197,15 @@ namespace ReadyCheck
             }
         }
 
-        void Swing(float dt, RotgutBoss boss, float dist, float damage, float interval, string ability, Color fxColor)
+        void Swing(float dt, Unit target, float dist, float damage, float interval, string ability, Color fxColor)
         {
             swingTimer -= dt;
             if (dist > MeleeRange) return;
             if (swingTimer <= 0f)
             {
                 swingTimer = interval;
-                Deal(boss.Unit, damage, ability);
-                var toBoss = boss.Unit.Position - Unit.Position;
+                Deal(target, damage, ability);
+                var toBoss = target.Position - Unit.Position;
                 float yaw = Mathf.Atan2(toBoss.x, toBoss.z) * Mathf.Rad2Deg + UnityEngine.Random.Range(-35f, 35f);
                 FX.Slash(Unit.Position + toBoss.normalized * 0.7f, yaw, fxColor, Profile.Role == Role.Tank ? 1.3f : 1f);
             }
@@ -208,7 +235,7 @@ namespace ReadyCheck
             }
         }
 
-        void HealerTick(float dt, RotgutBoss boss, float distToBoss)
+        void HealerTick(float dt, BossController boss, float distToBoss)
         {
             if (CastName == "Heal" && healTarget != null && !healTarget.IsDead)
             {
@@ -275,7 +302,7 @@ namespace ReadyCheck
 
         // ----- Interrupts --------------------------------------------------------------------------
 
-        public bool TryInterrupt(RotgutBoss boss)
+        public bool TryInterrupt(BossController boss)
         {
             if (!CanInterruptNow || boss == null || !boss.IsCasting || !boss.CastInterruptible) return false;
             if (DistanceToBossEdge(boss) > Profile.InterruptRange) return false;

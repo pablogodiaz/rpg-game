@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,12 +11,11 @@ namespace ReadyCheck
     ///  - Grease Fire     → move out of bad (handled by each member's Awareness)
     /// Phase 2 at 50%: everything comes faster. Enrage at 3:00.
     /// </summary>
-    public class RotgutBoss : MonoBehaviour
+    public class RotgutBoss : BossController
     {
-        public const string BossId = "rotgut";
-        public const string BossName = "Rotgut the Hungry";
+        public const string Id = "rotgut";
+        public const string Name = "Rotgut the Hungry";
         public const float MaxHealth = 13000f;
-        public const float EnrageTime = 180f;
 
         const float AutoAttackDamage = 110f;
         const float AutoAttackInterval = 2f;
@@ -31,120 +29,81 @@ namespace ReadyCheck
         const float IndigestionDamage = 300f;
         const float IndigestionDelay = 5f;
 
-        public Unit Unit { get; private set; }
-        public UnitVisual Visual { get; private set; }
+        public override string BossId => Id;
+        public override string BossName => Name;
+        public override float EnrageTime => 180f;
+        public override string[] PullLines => BarkLines.BossPull;
+        public override string[] RetryLines => BarkLines.BossRetry;
+        public override string[] KillLines => BarkLines.BossKill;
+        public override string[] WipeLines => BarkLines.BossWipe;
+        public override string[] DeathLines => BarkLines.BossDeath;
+        public override string[] InterruptedLines => BarkLines.BossInterrupted;
+        public override string[] LootTable => Loot;
+        public override string PhaseLabel => Phase2 ? "PHASE 2" : null;
+        public override string StatusText => WellFedStacks > 0 ? $"Well Fed x{WellFedStacks}" : null;
+        public override bool IsLeaping => leaping;
+        public override bool IsMarked(Unit u) => indigestionResolveAt > 0f && marked.Contains(u);
 
-        public string CastName { get; private set; }
-        public bool CastInterruptible { get; private set; }
-        public float CastStartedAt { get; private set; }
-        public float CastEndsAt { get; private set; }
-        public bool IsCasting => CastName != null;
-        public float CastFraction => IsCasting ? Mathf.InverseLerp(CastStartedAt, CastEndsAt, Time.time) : 0f;
+        static readonly string[] Loot =
+        {
+            "Rotgut's Stained Bib (Epic)",
+            "Half-Eaten Drumstick of Haste (Rare)",
+            "Belt of Infinite Loosening (Epic)",
+            "Gravy Boat of the Bottomless (Legendary... ish)",
+        };
 
         public int WellFedStacks { get; private set; }
         public bool Phase2 { get; private set; }
-        public bool Enraged { get; private set; }
-        public bool Fighting { get; private set; }
-        public float FightStartedAt { get; private set; }
-        public float FightTime => Fighting ? Time.time - FightStartedAt : 0f;
-        public Vector3 FacingDirection { get; private set; } = Vector3.back;
-        public Unit CurrentTarget { get; private set; }
-        public float IndigestionResolveAt => indigestionResolveAt;
-        public bool IsLeaping => leaping;
 
-        Action onCastComplete;
-        readonly Dictionary<Unit, float> threat = new Dictionary<Unit, float>();
-        float nextAuto, nextFire, nextFlop, nextIndigestion, nextBreakfast;
-
+        float nextFire, nextFlop, nextIndigestion, nextBreakfast;
         bool leaping;
         Vector3 leapFrom, leapTo;
         float leapStart;
         Telegraph flopTelegraph;
-
         float indigestionResolveAt = -1f;
         readonly List<Unit> marked = new List<Unit>();
         readonly List<Telegraph> markRings = new List<Telegraph>();
 
-        public void Init(Unit unit, UnitVisual visual)
-        {
-            Unit = unit;
-            Visual = visual;
-            unit.Damaged += OnDamaged;
-            unit.Died += OnDied;
-        }
-
         float DamageScale => (1f + 0.15f * WellFedStacks) * (Phase2 ? 1.1f : 1f) * (Enraged ? 5f : 1f);
 
-        public void BeginFight(PartyMember tank)
+        public static BossController Spawn(Transform root)
         {
-            Fighting = true;
-            FightStartedAt = Time.time;
+            var go = new GameObject(Name);
+            go.transform.SetParent(root, false);
+            go.transform.position = new Vector3(0f, 0f, 3f);
+            var unit = go.AddComponent<Unit>();
+            unit.Init(Name, Team.Enemy, Role.Boss, MaxHealth, 1.6f);
+            var visual = UnitVisual.Create(unit, PixelArt.Boss(), PixelArt.Foot(new Color32(112, 72, 52, 255), true),
+                0.95f, 0.35f, 20, 180f);
+            unit.Visual = visual;
+            var boss = go.AddComponent<RotgutBoss>();
+            boss.Init(unit, visual);
+            visual.AimDirection = () => boss.FacingDirection;
+            return boss;
+        }
+
+        public override void BeginFight(PartyMember tank)
+        {
+            base.BeginFight(tank);
             float now = Time.time;
-            nextAuto = now + 1.5f;
             nextFire = now + 7f;
             nextBreakfast = now + 10f;
             nextFlop = now + 22f;
             nextIndigestion = now + 42f;
-            threat.Clear();
-            if (tank != null) threat[tank.Unit] = 400f; // opening taunt
-            Barks.Say(Unit, BarkLines.Pick(BarkLines.BossPull), 3f, true);
         }
 
-        public void AddThreat(Unit source, float amount)
-        {
-            if (source == null) return;
-            threat.TryGetValue(source, out var t);
-            threat[source] = t + amount;
-        }
+        protected override void OnEnrage() => Barks.Say(Unit, "I'm not hungry anymore. I'm HANGRY!", 3f, true);
 
-        /// <summary>Taunt: jump to the top of the threat table and become the target immediately.</summary>
-        public void ForceTarget(Unit source)
+        protected override void OnBossDied()
         {
-            float max = 0f;
-            foreach (var kv in threat) max = Mathf.Max(max, kv.Value);
-            threat[source] = max + 800f;
-            CurrentTarget = source;
-        }
-
-        /// <summary>Delays his next swing (Shield Slam).</summary>
-        public void Stagger(float seconds)
-        {
-            nextAuto = Mathf.Max(nextAuto, Time.time + seconds);
-            if (Visual != null) Visual.Flash(Color.white, 0.12f);
-        }
-
-        void OnDamaged(Unit source, float amount)
-        {
-            if (source == null || source.Team != Team.Party) return;
-            threat.TryGetValue(source, out var t);
-            threat[source] = t + amount * (source.Role == Role.Tank ? 6f : 1f);
-        }
-
-        void OnDied(Unit u)
-        {
-            Fighting = false;
-            CastName = null;
             leaping = false;
             if (Visual != null) Visual.HeightOffset = 0f;
             ClearMarks();
             if (flopTelegraph != null) Destroy(flopTelegraph.gameObject);
-            Barks.Say(Unit, BarkLines.Pick(BarkLines.BossDeath), 4f, true);
-            EncounterManager.Instance.OnBossDefeated();
         }
 
-        void Update()
+        protected override void FightUpdate(float now, bool isCasting)
         {
-            var enc = EncounterManager.Instance;
-            if (!Fighting || Unit.IsDead || enc == null || enc.State != EncounterState.Fighting) return;
-            float now = Time.time;
-
-            if (!Enraged && FightTime >= EnrageTime)
-            {
-                Enraged = true;
-                Barks.Say(Unit, "I'm not hungry anymore. I'm HANGRY!", 3f, true);
-                CommandSystem.Instance.Shout("ROTGUT IS HANGRY! (Enrage)", new Color(1f, 0.25f, 0.2f));
-            }
-
             if (!Phase2 && Unit.HealthPercent <= 0.5f)
             {
                 Phase2 = true;
@@ -159,13 +118,7 @@ namespace ReadyCheck
                 UpdateLeap(now);
                 return;
             }
-
-            if (IsCasting)
-            {
-                if (now >= CastEndsAt) CompleteCast();
-                else FaceTarget();
-                return;
-            }
+            if (isCasting) return;
 
             if (now >= nextFire)
             {
@@ -199,42 +152,10 @@ namespace ReadyCheck
             UpdateMelee(now);
         }
 
-        // ----- Targeting & melee -------------------------------------------------------------------
-
-        Unit HighestThreat()
-        {
-            var enc = EncounterManager.Instance;
-            Unit best = null;
-            float bestThreat = -1f;
-            foreach (var member in enc.Party)
-            {
-                if (member.Unit.IsDead) continue;
-                threat.TryGetValue(member.Unit, out var t);
-                if (t > bestThreat)
-                {
-                    bestThreat = t;
-                    best = member.Unit;
-                }
-            }
-            return best;
-        }
-
-        void FaceTarget()
-        {
-            if (CurrentTarget == null || CurrentTarget.IsDead) return;
-            var dir = CurrentTarget.Position - Unit.Position;
-            dir.y = 0f;
-            if (dir.sqrMagnitude > 0.01f) FacingDirection = dir.normalized;
-        }
-
         void UpdateMelee(float now)
         {
-            var target = HighestThreat();
+            var target = UpdateTarget();
             if (target == null) return;
-            if (target != CurrentTarget && CurrentTarget != null && !CurrentTarget.IsDead && target.Role != Role.Tank)
-                Barks.Say(target, BarkLines.Pick(BarkLines.PulledAggro), 2f);
-            CurrentTarget = target;
-            FaceTarget();
 
             float dist = Vector3.Distance(Unit.Position, target.Position);
             float reach = Unit.Radius + target.Radius + 0.8f;
@@ -253,60 +174,26 @@ namespace ReadyCheck
             }
         }
 
-        // ----- Casting -----------------------------------------------------------------------------
-
-        void StartCast(string castName, float duration, bool interruptible, Action onComplete)
-        {
-            CastName = castName;
-            CastInterruptible = interruptible;
-            CastStartedAt = Time.time;
-            CastEndsAt = Time.time + duration;
-            onCastComplete = onComplete;
-        }
-
-        void CompleteCast()
-        {
-            var callback = onCastComplete;
-            CastName = null;
-            onCastComplete = null;
-            callback?.Invoke();
-        }
-
-        public void Interrupt(PartyMember by)
-        {
-            if (!IsCasting || !CastInterruptible) return;
-            CastName = null;
-            onCastComplete = null;
-            nextAuto = Time.time + 1f;
-            CombatLog.RecordInterrupt(by.Unit);
-            Barks.Say(by.Unit, BarkLines.Pick(BarkLines.Kicked), 1.6f, true);
-            Barks.Say(Unit, BarkLines.Pick(BarkLines.BossInterrupted), 2.2f, true);
-            CommandSystem.Instance.Shout($"{by.Profile.Name} interrupted Second Breakfast!", new Color(1f, 0.95f, 0.4f));
-        }
-
         // ----- Belly Flop (STACK) ------------------------------------------------------------------
 
         void StartBellyFlop()
         {
-            var enc = EncounterManager.Instance;
-            var candidates = new List<Unit>();
-            foreach (var member in enc.Party)
-                if (!member.Unit.IsDead && member.Profile.Role != Role.Tank) candidates.Add(member.Unit);
-            if (candidates.Count == 0)
-                foreach (var member in enc.Party)
-                    if (!member.Unit.IsDead) candidates.Add(member.Unit);
+            var candidates = LivingParty(false);
+            if (candidates.Count == 0) candidates = LivingParty(true);
             if (candidates.Count == 0) return;
 
-            var target = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            var target = PickRandom(candidates);
             var point = target.Position;
             flopTelegraph = Telegraph.Circle(point, FlopRadius, new Color(1f, 0.55f, 0.1f), FlopTelegraphTime);
             StartCast("Belly Flop", FlopTelegraphTime - LeapDuration, false, () => BeginLeap(point));
             Barks.Say(Unit, BarkLines.Pick(BarkLines.BossFlop), 2.5f, true);
 
-            enc.BroadcastMechanic(new MechanicEvent
+            string who = target.DisplayName == "You" ? "YOU! Stay in" : target.DisplayName + "! Run into";
+            Enc.BroadcastMechanic(new MechanicEvent
             {
                 Kind = MechanicKind.BellyFlop, Point = point, Radius = FlopRadius,
                 ResolveAt = Time.time + FlopTelegraphTime, Target = target, SuggestedCall = RaidCall.Stack,
+                Hint = $"BELLY FLOP on {who} the orange circle and call STACK [{{call}}] so 3+ people share the hit.",
             });
         }
 
@@ -335,9 +222,8 @@ namespace ReadyCheck
 
         void ResolveBellyFlop(Vector3 point)
         {
-            var enc = EncounterManager.Instance;
             var inside = new List<Unit>();
-            foreach (var member in enc.Party)
+            foreach (var member in Enc.Party)
             {
                 if (member.Unit.IsDead) continue;
                 if (Vector3.Distance(member.Unit.Position, point) <= FlopRadius + member.Unit.Radius * 0.5f)
@@ -346,7 +232,7 @@ namespace ReadyCheck
 
             if (inside.Count == 0)
             {
-                foreach (var member in enc.Party)
+                foreach (var member in Enc.Party)
                     member.Unit.TakeDamage(FlopNobodySoaked * DamageScale, Unit, "Belly Flop (nobody caught him)");
                 CommandSystem.Instance.Shout("Nobody caught him! The whole floor shakes!", new Color(1f, 0.5f, 0.2f));
             }
@@ -370,17 +256,18 @@ namespace ReadyCheck
         {
             StartCast("Indigestion", 2f, false, ApplyIndigestionMarks);
             Barks.Say(Unit, BarkLines.Pick(BarkLines.BossIndigestion), 2.5f, true);
-            EncounterManager.Instance.BroadcastMechanic(new MechanicEvent
+            Enc.BroadcastMechanic(new MechanicEvent
             {
                 Kind = MechanicKind.Indigestion, Radius = IndigestionRadius,
                 ResolveAt = Time.time + 2f + IndigestionDelay, SuggestedCall = RaidCall.Spread,
+                Hint = "INDIGESTION! Everyone is about to explode. Call SPREAD [{call}] and go to your YOU spot.",
             });
         }
 
         void ApplyIndigestionMarks()
         {
             ClearMarks();
-            foreach (var member in EncounterManager.Instance.Party)
+            foreach (var member in Enc.Party)
             {
                 if (member.Unit.IsDead) continue;
                 marked.Add(member.Unit);
@@ -393,13 +280,12 @@ namespace ReadyCheck
         void ResolveIndigestion()
         {
             indigestionResolveAt = -1f;
-            var party = EncounterManager.Instance.Party;
             foreach (var u in marked)
             {
                 if (u == null || u.IsDead) continue;
                 Telegraph.Flash(u.Position, IndigestionRadius, new Color(0.7f, 0.35f, 1f), 0.35f);
                 FX.Burst(u.Position, new Color(0.55f, 0.85f, 0.3f), 16, 7f, 0.6f, 1.6f); // gas
-                foreach (var member in party)
+                foreach (var member in Enc.Party)
                 {
                     var v = member.Unit;
                     if (v == u || v.IsDead) continue;
@@ -426,9 +312,10 @@ namespace ReadyCheck
         {
             StartCast("Second Breakfast", 3f, true, CompleteBreakfast);
             Barks.Say(Unit, BarkLines.Pick(BarkLines.BossBreakfast), 2.5f, true);
-            EncounterManager.Instance.BroadcastMechanic(new MechanicEvent
+            Enc.BroadcastMechanic(new MechanicEvent
             {
-                Kind = MechanicKind.SecondBreakfast, ResolveAt = Time.time + 3f, SuggestedCall = RaidCall.Interrupt,
+                Kind = MechanicKind.InterruptibleCast, ResolveAt = Time.time + 3f, SuggestedCall = RaidCall.Interrupt,
+                Hint = "SECOND BREAKFAST (interruptible)! Call INTERRUPT [{call}] before he finishes eating.",
             });
         }
 
@@ -447,19 +334,15 @@ namespace ReadyCheck
 
         void SpawnGreaseFire()
         {
-            var enc = EncounterManager.Instance;
-            var candidates = new List<Unit>();
-            foreach (var member in enc.Party)
-                if (!member.Unit.IsDead && member.Profile.Role != Role.Tank) candidates.Add(member.Unit);
-
+            var candidates = LivingParty(false);
             int count = Phase2 ? 3 : 2;
             for (int i = 0; i < count && candidates.Count > 0; i++)
             {
-                int pick = UnityEngine.Random.Range(0, candidates.Count);
-                FirePuddle.Spawn(candidates[pick].Position, 1.6f, 25f, Unit);
+                int pick = Random.Range(0, candidates.Count);
+                FirePuddle.SpawnFire(candidates[pick].Position, 1.6f, 25f, Unit);
                 candidates.RemoveAt(pick);
             }
-            if (UnityEngine.Random.value < 0.35f) Barks.Say(Unit, BarkLines.Pick(BarkLines.BossFire), 2f);
+            if (Random.value < 0.35f) Barks.Say(Unit, BarkLines.Pick(BarkLines.BossFire), 2f);
         }
     }
 }

@@ -16,7 +16,7 @@ namespace ReadyCheck
         float vw = 1280f;
         float vh = RefHeight;
 
-        GUIStyle label, labelRight, labelCenter, small, smallCenter, smallRight, big, title, bubble, wheelItem, floating, chip;
+        GUIStyle label, labelRight, labelCenter, small, smallCenter, smallRight, big, title, bubble, wheelItem, floating, chip, hint;
         bool stylesReady;
 
         static readonly Color Panel = new Color(0.06f, 0.05f, 0.09f, 0.82f);
@@ -42,6 +42,7 @@ namespace ReadyCheck
             wheelItem = new GUIStyle(labelCenter) { fontSize = 15, fontStyle = FontStyle.Bold };
             floating = new GUIStyle(labelCenter) { fontStyle = FontStyle.Bold };
             chip = new GUIStyle(smallCenter) { fontSize = 9, fontStyle = FontStyle.Bold };
+            hint = new GUIStyle(labelCenter) { fontSize = 13, wordWrap = true };
             stylesReady = true;
         }
 
@@ -104,6 +105,7 @@ namespace ReadyCheck
                 case RaidCall.Burn: return input.Glyph("D-Right", "4");
                 case RaidCall.Defensives: return input.Glyph("LB wheel", "5");
                 case RaidCall.AsYouWere: return input.Glyph("LB wheel", "6");
+                case RaidCall.Focus: return input.Glyph("RB", "7");
                 default: return "";
             }
         }
@@ -123,6 +125,7 @@ namespace ReadyCheck
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1f));
 
             DrawWorldMarkers(enc);
+            DrawBossParts(enc);
             DrawFloatingText();
             DrawBarks();
             if (enc.Boss != null) DrawBossFrame(enc);
@@ -178,6 +181,46 @@ namespace ReadyCheck
             }
         }
 
+        /// <summary>Health bars and names over extra targets (Krakenna's arms), the FOCUS skull, and grip meters.</summary>
+        void DrawBossParts(EncounterManager enc)
+        {
+            var boss = enc.Boss;
+            if (boss == null || enc.State == EncounterState.Wipe || enc.State == EncounterState.Victory) return;
+            foreach (var u in boss.ExtraTargets)
+            {
+                if (u == null || u.IsDead) continue;
+                if (!WorldToGui(u.Position, out var g)) continue;
+                bool focused = enc.FocusTarget == u;
+                var arm = u.GetComponent<KrakenArm>();
+                bool hugging = arm != null && arm.Grabbed != null;
+                // Keep it readable: bars only on arms that matter right now, names only when focused or hugging.
+                if (!focused && !hugging && u.HealthPercent >= 0.999f) continue;
+                const float w = 58f;
+                var bar = new Rect(g.x - w / 2f, g.y - 30f, w, 6f);
+                if (focused) Box(new Rect(bar.x - 2, bar.y - 2, bar.width + 4, bar.height + 4), Gold);
+                Bar(bar, u.HealthPercent, new Color(0.9f, 0.35f, 0.6f), new Color(0.1f, 0.05f, 0.08f, 0.9f));
+                if (focused || hugging)
+                    Text(new Rect(g.x - 60f, g.y - 46f, 120f, 16f), u.DisplayName, chip, focused ? Gold : new Color(1f, 0.85f, 0.92f));
+
+                if (arm != null && arm.Grabbed != null)
+                {
+                    var grip = new Rect(g.x - w / 2f, g.y - 22f, w, 5f);
+                    Bar(grip, arm.GripFraction, new Color(0.5f, 1f, 0.6f), new Color(0.1f, 0.1f, 0.1f, 0.9f));
+                    Text(new Rect(g.x - 80f, g.y - 18f, 160f, 16f),
+                        $"HUGGING {arm.Grabbed.Profile.Name.ToUpperInvariant()}  {arm.GrabTimeLeft:0.0}s", chip, new Color(1f, 0.6f, 0.75f));
+                }
+            }
+
+            var focus = enc.FocusTarget;
+            if (focus != null && !focus.IsDead && WorldToGui(focus.Position, out var fg))
+            {
+                float bob = Mathf.Sin(Time.unscaledTime * 5f) * 3f;
+                var tex = PixelArt.Skull().texture;
+                float size = 11f * 2.6f;
+                GUI.DrawTexture(new Rect(fg.x - size / 2f, fg.y - 52f - size + bob, size, size * 12f / 11f), tex);
+            }
+        }
+
         /// <summary>Damage numbers and ability callouts rising off units.</summary>
         void DrawFloatingText()
         {
@@ -221,13 +264,13 @@ namespace ReadyCheck
             float w = 520f, x = (vw - w) / 2f, y = 10f;
             Box(new Rect(x - 8, y - 4, w + 16, boss.IsCasting ? 82 : 58), Panel);
 
-            string name = RotgutBoss.BossName + (boss.Phase2 ? "   - PHASE 2" : "");
+            string name = boss.BossName + (boss.PhaseLabel != null ? "   - " + boss.PhaseLabel : "");
             Text(new Rect(x, y, w, 20), name, label, boss.Enraged ? new Color(1f, 0.4f, 0.3f) : Color.white);
 
             string right = "";
-            if (boss.WellFedStacks > 0) right += $"Well Fed x{boss.WellFedStacks}    ";
+            if (boss.StatusText != null) right += boss.StatusText + "    ";
             if (enc.State == EncounterState.Fighting)
-                right += boss.Enraged ? "ENRAGED" : $"Enrage in {CombatLog.FormatTime(RotgutBoss.EnrageTime - boss.FightTime)}";
+                right += boss.Enraged ? "ENRAGED" : $"Enrage in {CombatLog.FormatTime(boss.EnrageTime - boss.FightTime)}";
             Text(new Rect(x, y, w, 20), right, labelRight, Gold);
 
             var hpRect = new Rect(x, y + 22, w, 18);
@@ -268,8 +311,10 @@ namespace ReadyCheck
                 var tags = new List<string>();
                 if (p.AI != null && p.AI.OrderLabel != null) tags.Add(p.AI.OrderLabel);
                 foreach (var buff in u.Buffs) tags.Add(buff.Label);
-                if (!u.IsDead && FirePuddle.At(u.Position, -0.1f) != null) tags.Add("IN FIRE");
-                if (enc.Boss != null && enc.Boss.IndigestionResolveAt > 0f && !u.IsDead) tags.Add("MARKED");
+                var puddle = u.IsDead ? null : FirePuddle.At(u.Position, -0.1f);
+                if (puddle != null) tags.Add(puddle.Label);
+                if (enc.Boss != null && !u.IsDead && enc.Boss.IsMarked(u)) tags.Add("MARKED");
+                if (p.IsHeld) tags.Add("GRABBED");
                 Text(new Rect(x + 8, y + 1, w - 12, 18), string.Join(" ", tags), smallRight, Gold);
 
                 var hpRect = new Rect(x + 8, y + 19, w - 16, 13);
@@ -385,30 +430,13 @@ namespace ReadyCheck
         {
             var e = enc.ActiveHint;
             if (!enc.ShowHints || e == null) return;
-            string glyph = CallGlyph(input, e.SuggestedCall);
-            string text;
-            switch (e.Kind)
-            {
-                case MechanicKind.BellyFlop:
-                    string who = e.Target != null ? e.Target.DisplayName : "someone";
-                    text = who == "You"
-                        ? $"BELLY FLOP on YOU! Stay in the orange circle and call STACK [{glyph}] so 3+ people share the hit."
-                        : $"BELLY FLOP on {who}! Run into the orange circle and call STACK [{glyph}] so 3+ people share the hit.";
-                    break;
-                case MechanicKind.Indigestion:
-                    text = $"INDIGESTION! Everyone is about to explode. Call SPREAD [{glyph}] and go to your YOU spot.";
-                    break;
-                case MechanicKind.SecondBreakfast:
-                    text = $"SECOND BREAKFAST (interruptible)! Call INTERRUPT [{glyph}] before he finishes eating.";
-                    break;
-                default:
-                    return;
-            }
-            float w = 720f, x = (vw - w) / 2f, y = vh - 150f;
+            if (string.IsNullOrEmpty(e.Hint)) return;
+            string text = e.Hint.Replace("{call}", CallGlyph(input, e.SuggestedCall));
+            float w = Mathf.Min(vw - 40f, 880f), x = (vw - w) / 2f, y = vh - 160f;
             var col = RaidCallInfo.Color(e.SuggestedCall);
-            Box(new Rect(x, y, w, 30), new Color(0.05f, 0.04f, 0.08f, 0.88f));
-            Box(new Rect(x, y, 4, 30), col);
-            Text(new Rect(x + 10, y + 5, w - 20, 20), text, labelCenter, col);
+            Box(new Rect(x, y, w, 40), new Color(0.05f, 0.04f, 0.08f, 0.88f));
+            Box(new Rect(x, y, 4, 40), col);
+            Text(new Rect(x + 10, y + 2, w - 20, 36), text, hint, col);
         }
 
         void DrawShout()
@@ -461,20 +489,27 @@ namespace ReadyCheck
 
         void DrawPrePull(EncounterManager enc, GameInput input)
         {
-            float w = 660f, h = 450f, x = (vw - w) / 2f, y = (vh - h) / 2f + 20f;
+            float w = 700f, h = 480f, x = (vw - w) / 2f, y = (vh - h) / 2f + 20f;
             Box(new Rect(x, y, w, h), Panel);
             Box(new Rect(x, y, w, 3), Gold);
             Text(new Rect(x, y + 10, w, 30), "READY CHECK", title, Gold);
 
-            int attempts = Familiarity.Attempts(RotgutBoss.BossId);
-            float best = Familiarity.BestPercent(RotgutBoss.BossId);
-            int kills = Familiarity.Kills(RotgutBoss.BossId);
+            var boss = enc.Boss;
+            var entry = enc.SelectedEntry;
+            int attempts = Familiarity.Attempts(boss.BossId);
+            float best = Familiarity.BestPercent(boss.BossId);
+            int kills = Familiarity.Kills(boss.BossId);
             string progress = attempts == 0
                 ? "First pull. Nobody knows this fight yet, so you'll have to call everything."
                 : $"Attempts: {attempts}    Best: {(kills > 0 ? "KILLED" : best.ToString("0.0") + "% boss HP")}    Kills: {kills}";
-            Text(new Rect(x, y + 40, w, 20), $"{RotgutBoss.BossName}  -  {progress}", smallCenter, Muted);
+            string selector = BossRoster.All.Length > 1
+                ? $"<  {boss.BossName}  >    ({enc.SelectedBoss + 1}/{BossRoster.All.Length})   [{input.Glyph("RB", "Tab")}] switch boss"
+                : boss.BossName;
+            Text(new Rect(x, y + 38, w, 20), selector, labelCenter, new Color(1f, 0.75f, 0.85f));
+            Text(new Rect(x, y + 58, w, 18), $"{entry.Location}: {entry.Blurb}", smallCenter, Muted);
+            Text(new Rect(x, y + 74, w, 18), progress, smallCenter, Muted);
 
-            float ly = y + 70f;
+            float ly = y + 98f;
             Text(new Rect(x + 20, ly, w - 40, 20), "YOUR PARTY", small, Muted);
             ly += 18f;
             foreach (var p in enc.Party)
@@ -500,14 +535,14 @@ namespace ReadyCheck
             string[] controls = input.UsingGamepad
                 ? new[]
                 {
-                    "Left stick: move   RT: attack   A: dodge   X: Piercing Lance   Y: Rally   B: Battle Rez",
-                    "D-pad: Quick Calls (Up Stack, Down Spread, Left Interrupt, Right Burn)",
+                    "Left stick: move   RT: attack   A: dodge (wriggle when grabbed)   X: Lance   Y: Rally   B: Battle Rez",
+                    "D-pad: Quick Calls (Up Stack, Down Spread, Left Interrupt, Right Burn)   RB: FOCUS (skull)",
                     "Hold LB: Raid Wheel (slow-mo), aim with right stick, release to call",
                 }
                 : new[]
                 {
-                    "WASD: move   LMB / J: attack   Space: dodge   E: Piercing Lance   R: Rally   F: Battle Rez",
-                    "1-6: calls (Stack, Spread, Interrupt, Burn, Defensives, As You Were)",
+                    "WASD: move   LMB / J: attack   Space: dodge (wriggle when grabbed)   E: Lance   R: Rally   F: Battle Rez",
+                    "1-7: calls (Stack, Spread, Interrupt, Burn, Defensives, As You Were, FOCUS)",
                     "Hold Q or RMB: Raid Wheel (slow-mo), move the mouse toward a call, release to call",
                 };
             foreach (var c in controls)
@@ -540,9 +575,9 @@ namespace ReadyCheck
             Text(new Rect(x, y + 10, w, 30), victory ? "VICTORY!" : "WIPE", title, accent);
 
             string summary = victory
-                ? $"{RotgutBoss.BossName} defeated in {CombatLog.FormatTime(enc.FightDuration)} on attempt #{enc.AttemptNumber}!"
-                : $"Rotgut at {enc.BossPercentAtEnd:0.0}% after {CombatLog.FormatTime(enc.FightDuration)}" +
-                  (enc.NewBest ? "   NEW BEST!" : $"   (best: {Familiarity.BestPercent(RotgutBoss.BossId):0.0}%)");
+                ? $"{enc.Boss.BossName} defeated in {CombatLog.FormatTime(enc.FightDuration)} on attempt #{enc.AttemptNumber}!"
+                : $"{enc.Boss.BossName} at {enc.BossPercentAtEnd:0.0}% after {CombatLog.FormatTime(enc.FightDuration)}" +
+                  (enc.NewBest ? "   NEW BEST!" : $"   (best: {Familiarity.BestPercent(enc.Boss.BossId):0.0}%)");
             Text(new Rect(x, y + 40, w, 20), summary, labelCenter);
 
             // Table
@@ -575,7 +610,7 @@ namespace ReadyCheck
             ty += 17f;
             if (topDamage != null) { Text(new Rect(c0, ty, w - 48, 18), $"Top Damage: {topDamage.DisplayName} ({topDmg:0})", small); ty += 16f; }
             if (flashiest != null) { Text(new Rect(c0, ty, w - 48, 18), $"Flashiest: {flashiest.DisplayName} ({flashes} abilities)", small); ty += 16f; }
-            if (mostFire != null) { Text(new Rect(c0, ty, w - 48, 18), $"Most Fire Stood In: {mostFire.DisplayName} ({fire} ticks)", small); ty += 16f; }
+            if (mostFire != null) { Text(new Rect(c0, ty, w - 48, 18), $"Most Time Standing In Bad: {mostFire.DisplayName} ({fire} ticks)", small); ty += 16f; }
             if (CombatLog.DeathOrder.Count > 0) { Text(new Rect(c0, ty, w - 48, 18), $"First To Die: {CombatLog.DeathOrder[0].DisplayName}", small); ty += 16f; }
 
             ty += 8f;
@@ -583,7 +618,7 @@ namespace ReadyCheck
             string recent = calls > 0 ? string.Join(", ", CombatLog.Calls.GetRange(Mathf.Max(0, calls - 5), Mathf.Min(5, calls))) : "none. Bold strategy.";
             Text(new Rect(c0, ty, w - 48, 18), $"Calls made: {calls}   (last: {recent})", small);
             ty += 18f;
-            Text(new Rect(c0, ty, w - 48, 18), "Your party is learning: everyone gained +1 familiarity with Rotgut.", small, new Color(0.5f, 0.9f, 1f));
+            Text(new Rect(c0, ty, w - 48, 18), $"Your party is learning: everyone gained +1 familiarity with {enc.Boss.BossName}.", small, new Color(0.5f, 0.9f, 1f));
             ty += 18f;
 
             if (victory && enc.LootDrop != null)

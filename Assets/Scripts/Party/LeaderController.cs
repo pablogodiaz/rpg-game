@@ -11,7 +11,7 @@ namespace ReadyCheck
     {
         public static readonly RaidCall[] WheelCalls =
         {
-            RaidCall.Stack, RaidCall.Spread, RaidCall.Interrupt,
+            RaidCall.Stack, RaidCall.Spread, RaidCall.Interrupt, RaidCall.Focus,
             RaidCall.Burn, RaidCall.Defensives, RaidCall.AsYouWere,
         };
 
@@ -84,7 +84,14 @@ namespace ReadyCheck
                 return;
             }
 
-            if (input.Dodge.WasPressedThisFrame() && Time.time >= DodgeReadyAt)
+            if (input.Dodge.WasPressedThisFrame() && m.IsHeld)
+            {
+                // Wriggle! Dodging while hugged loosens the grip instead.
+                var arm = m.HeldBy.GetComponent<KrakenArm>();
+                if (arm != null) arm.AddGrip(120f);
+                FX.Callout(m.Unit, "WRIGGLE!", new Color(1f, 0.9f, 0.6f));
+            }
+            else if (input.Dodge.WasPressedThisFrame() && Time.time >= DodgeReadyAt)
             {
                 dodgeDir = lastMoveDir;
                 dodgeEndsAt = Time.time + DodgeDuration;
@@ -106,6 +113,7 @@ namespace ReadyCheck
             if (input.CallBurn.WasPressedThisFrame()) cmd.Issue(RaidCall.Burn);
             if (input.CallDefensives.WasPressedThisFrame()) cmd.Issue(RaidCall.Defensives);
             if (input.CallAsYouWere.WasPressedThisFrame()) cmd.Issue(RaidCall.AsYouWere);
+            if (input.CallFocus.WasPressedThisFrame()) cmd.Issue(RaidCall.Focus);
 
             // Raid Wheel (hold)
             if (input.Wheel.IsPressed())
@@ -136,11 +144,11 @@ namespace ReadyCheck
 
         void TryAttack(EncounterManager enc)
         {
-            var boss = enc.Boss;
-            if (boss == null || boss.Unit.IsDead) return;
-            if (m.DistanceToBossEdge(boss) > AttackRange) return;
+            var target = m.AttackTarget;
+            if (target == null || target.IsDead) return;
+            if (m.DistanceToEdge(target) > AttackRange) return;
             attackReadyAt = Time.time + AttackInterval;
-            m.FireAt(boss.Unit, AttackDamage, new Color(1f, 0.9f, 0.35f), "Leader Bolt");
+            m.FireAt(target, AttackDamage, new Color(1f, 0.9f, 0.35f), "Leader Bolt");
         }
 
         void UseAbility<T>() where T : Ability

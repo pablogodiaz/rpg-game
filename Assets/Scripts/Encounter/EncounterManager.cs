@@ -6,7 +6,7 @@ namespace ReadyCheck
     public enum EncounterState { PrePull, Countdown, Fighting, Wipe, Victory }
 
     /// <summary>
-    /// Runs one boss encounter: spawns the party and boss, Ready Check → countdown → pull,
+    /// Runs one boss encounter: spawns the party and the selected boss, Ready Check → countdown → pull,
     /// detects wipes and kills, saves progress, and resets for "one more pull".
     /// </summary>
     public class EncounterManager : MonoBehaviour
@@ -18,7 +18,15 @@ namespace ReadyCheck
         public Transform Root { get; private set; }
         public readonly List<PartyMember> Party = new List<PartyMember>();
         public PartyMember Leader { get; private set; }
-        public RotgutBoss Boss { get; private set; }
+        public BossController Boss { get; private set; }
+        public int SelectedBoss { get; private set; }
+        public BossEntry SelectedEntry => BossRoster.All[SelectedBoss];
+
+        /// <summary>The leader's FOCUS target (skull marker). Damage dealers attack it instead of the boss.</summary>
+        public Unit FocusTarget { get; private set; }
+
+        public void SetFocus(Unit target) => FocusTarget = target;
+        public void ClearFocus() => FocusTarget = null;
 
         public bool ShowHints = true;
         public MechanicEvent ActiveHint { get; private set; }
@@ -33,18 +41,20 @@ namespace ReadyCheck
         public string EndQuoteBy { get; private set; }
 
         float countdownEndsAt;
-
-        static readonly string[] LootTable =
-        {
-            "Rotgut's Stained Bib (Epic)",
-            "Half-Eaten Drumstick of Haste (Rare)",
-            "Belt of Infinite Loosening (Epic)",
-            "Gravy Boat of the Bottomless (Legendary... ish)",
-        };
+        const string SelectedBossKey = "ReadyCheck.selectedBoss";
 
         void Awake()
         {
             Instance = this;
+            SelectedBoss = Mathf.Clamp(PlayerPrefs.GetInt(SelectedBossKey, 0), 0, BossRoster.All.Length - 1);
+        }
+
+        void SelectNextBoss()
+        {
+            SelectedBoss = (SelectedBoss + 1) % BossRoster.All.Length;
+            PlayerPrefs.SetInt(SelectedBossKey, SelectedBoss);
+            PlayerPrefs.Save();
+            Build();
         }
 
         void Start()
@@ -62,6 +72,10 @@ namespace ReadyCheck
             CombatLog.Reset();
             if (CommandSystem.Instance != null) CommandSystem.Instance.ResetState();
 
+            var entry = SelectedEntry;
+            Arena.SetTheme(entry.Theme);
+            Boss = entry.Spawn(Root);
+
             var profiles = Roster.StarterParty();
             for (int i = 0; i < profiles.Count; i++)
             {
@@ -69,7 +83,6 @@ namespace ReadyCheck
                 Party.Add(SpawnMember(profiles[i], i, start));
             }
             Leader = Party[0];
-            Boss = SpawnBoss(new Vector3(0f, 0f, 3f));
 
             var rig = CameraRig.Instance;
             if (rig != null)
@@ -93,6 +106,8 @@ namespace ReadyCheck
             Root = null;
             Party.Clear();
             FirePuddle.All.Clear();
+            Telegraph.Dangers.Clear();
+            FocusTarget = null;
             Leader = null;
             Boss = null;
         }
@@ -111,12 +126,12 @@ namespace ReadyCheck
             member.Unit = unit;
             member.Index = index;
             member.IsLeader = profile.Class == ClassKind.Leader;
-            member.Familiarity = Familiarity.Get(RotgutBoss.BossId, profile.Name);
+            member.Familiarity = Familiarity.Get(Boss.BossId, profile.Name);
             member.SetupAbilities();
 
             var visual = UnitVisual.Create(unit, PixelArt.Character(profile), PixelArt.Foot(profile.Secondary, false),
                 0.3f, 0.22f, 10, 0f);
-            visual.AimDirection = () => AimAtBoss(unit);
+            visual.AimDirection = () => AimAt(member);
             unit.Visual = visual;
 
             if (member.IsLeader)
@@ -142,27 +157,12 @@ namespace ReadyCheck
             return member;
         }
 
-        RotgutBoss SpawnBoss(Vector3 position)
-        {
-            var go = new GameObject(RotgutBoss.BossName);
-            go.transform.SetParent(Root, false);
-            go.transform.position = position;
-            var unit = go.AddComponent<Unit>();
-            unit.Init(RotgutBoss.BossName, Team.Enemy, Role.Boss, RotgutBoss.MaxHealth, 1.6f);
-            var visual = UnitVisual.Create(unit, PixelArt.Boss(), PixelArt.Foot(new Color32(112, 72, 52, 255), true),
-                0.95f, 0.35f, 20, 180f);
-            unit.Visual = visual;
-            var boss = go.AddComponent<RotgutBoss>();
-            boss.Init(unit, visual);
-            visual.AimDirection = () => boss.FacingDirection;
-            return boss;
-        }
-
-        /// <summary>Party members face the boss while fighting, otherwise the way they walk.</summary>
-        Vector3 AimAtBoss(Unit unit)
+        /// <summary>Party members face whatever they are attacking while fighting, otherwise the way they walk.</summary>
+        Vector3 AimAt(PartyMember member)
         {
             if (State != EncounterState.Fighting || Boss == null || Boss.Unit.IsDead) return Vector3.zero;
-            return Boss.Unit.Position - unit.Position;
+            var target = member.AttackTarget;
+            return target != null ? target.Position - member.Unit.Position : Vector3.zero;
         }
 
         void SetState(EncounterState state)
@@ -185,8 +185,12 @@ namespace ReadyCheck
                     {
                         var names = new List<string>();
                         foreach (var p in Party) names.Add(p.Profile.Name);
-                        Familiarity.ResetBoss(RotgutBoss.BossId, names);
+                        Familiarity.ResetBoss(Boss.BossId, names);
                         Build();
+                    }
+                    else if (input.NextBoss.WasPressedThisFrame())
+                    {
+                        SelectNextBoss();
                     }
                     else if (input.Confirm.WasPressedThisFrame() && Time.unscaledTime - StateEnteredAt > 0.3f)
                     {
@@ -225,14 +229,14 @@ namespace ReadyCheck
                     : BarkLines.Pick(BarkLines.Ready);
                 Barks.Say(p.Unit, line, 2.5f, true);
             }
-            if (Familiarity.Attempts(RotgutBoss.BossId) > 0)
-                Barks.Say(Boss.Unit, BarkLines.Pick(BarkLines.BossRetry), 3f, true);
+            if (Familiarity.Attempts(Boss.BossId) > 0)
+                Barks.Say(Boss.Unit, BarkLines.Pick(Boss.RetryLines), 3f, true);
         }
 
         void Pull()
         {
             SetState(EncounterState.Fighting);
-            AttemptNumber = Familiarity.IncrementAttempts(RotgutBoss.BossId);
+            AttemptNumber = Familiarity.IncrementAttempts(Boss.BossId);
             Familiarity.Save();
             CombatLog.Reset();
             PartyMember tank = null;
@@ -254,7 +258,7 @@ namespace ReadyCheck
         {
             if (State != EncounterState.Fighting) return;
             if (Random.value < 0.5f && Boss != null && !Boss.Unit.IsDead)
-                Barks.Say(Boss.Unit, BarkLines.Pick(BarkLines.BossKill), 2f);
+                Barks.Say(Boss.Unit, BarkLines.Pick(Boss.KillLines), 2f);
 
             var alive = new List<PartyMember>();
             foreach (var p in Party)
@@ -276,14 +280,15 @@ namespace ReadyCheck
             TimeController.SetSlowMo(false);
             FightDuration = CombatLog.FightTime;
             BossPercentAtEnd = Boss != null ? Boss.Unit.HealthPercent * 100f : 100f;
-            NewBest = Familiarity.TrySetBest(RotgutBoss.BossId, victory ? 0f : BossPercentAtEnd);
-            if (victory) Familiarity.AddKill(RotgutBoss.BossId);
+            NewBest = Familiarity.TrySetBest(Boss.BossId, victory ? 0f : BossPercentAtEnd);
+            if (victory) Familiarity.AddKill(Boss.BossId);
 
             // Everyone learns from every pull, win or wipe.
-            foreach (var p in Party) Familiarity.Increment(RotgutBoss.BossId, p.Profile.Name);
+            foreach (var p in Party) Familiarity.Increment(Boss.BossId, p.Profile.Name);
             Familiarity.Save();
 
-            LootDrop = victory ? LootTable[Random.Range(0, LootTable.Length)] : null;
+            var loot = Boss.LootTable;
+            LootDrop = victory ? loot[Random.Range(0, loot.Length)] : null;
 
             // A parting line from someone in the party.
             var speakers = new List<PartyMember>();
@@ -296,7 +301,7 @@ namespace ReadyCheck
             else EndQuote = BarkLines.Pick(BarkLines.Wipe);
 
             SetState(victory ? EncounterState.Victory : EncounterState.Wipe);
-            if (!victory && Boss != null) Barks.Say(Boss.Unit, BarkLines.Pick(BarkLines.BossWipe), 4f, true);
+            if (!victory && Boss != null) Barks.Say(Boss.Unit, BarkLines.Pick(Boss.WipeLines), 4f, true);
         }
     }
 }

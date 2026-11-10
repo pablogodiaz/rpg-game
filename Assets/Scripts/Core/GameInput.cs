@@ -27,6 +27,8 @@ namespace ReadyCheck
         public InputAction CallBurn { get; private set; }
         public InputAction CallDefensives { get; private set; }
         public InputAction CallAsYouWere { get; private set; }
+        public InputAction CallFocus { get; private set; }
+        public InputAction NextBoss { get; private set; }
         public InputAction Confirm { get; private set; }
         public InputAction ToggleHints { get; private set; }
         public InputAction ResetProgress { get; private set; }
@@ -83,6 +85,8 @@ namespace ReadyCheck
             CallBurn = Button("CallBurn", "<Gamepad>/dpad/right", "<Keyboard>/4");
             CallDefensives = Button("CallDefensives", "<Keyboard>/5");
             CallAsYouWere = Button("CallAsYouWere", "<Keyboard>/6");
+            CallFocus = Button("CallFocus", "<Gamepad>/rightShoulder", "<Keyboard>/7");
+            NextBoss = Button("NextBoss", "<Gamepad>/rightShoulder", "<Keyboard>/tab");
 
             Confirm = Button("Confirm", "<Gamepad>/start", "<Gamepad>/buttonSouth", "<Keyboard>/enter",
                 "<Keyboard>/numpadEnter", "<Keyboard>/space");

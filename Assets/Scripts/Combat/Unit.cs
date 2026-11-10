@@ -6,7 +6,8 @@ namespace ReadyCheck
 {
     public enum Team { Party, Enemy }
 
-    public enum Role { Tank, Healer, Melee, Ranged, Boss }
+    /// <summary>Add = a secondary enemy target, like one of Krakenna's arms.</summary>
+    public enum Role { Tank, Healer, Melee, Ranged, Boss, Add }
 
     public enum BuffKind
     {

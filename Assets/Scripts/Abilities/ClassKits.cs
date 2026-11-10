@@ -204,18 +204,17 @@ namespace ReadyCheck
         public override Color Color => new Color(1f, 0.4f, 0.4f);
         public override bool IsBurst => true;
 
-        protected override bool Prepare(bool forced) => DistToBossEdge <= (forced ? 8f : 4f);
+        protected override bool Prepare(bool forced) => !Owner.IsHeld && DistToTargetEdge <= (forced ? 8f : 4f);
 
-        protected override void Execute() => Owner.StartCoroutine(Run());
+        protected override void Execute() => Owner.StartCoroutine(Run(Target));
 
-        IEnumerator Run()
+        IEnumerator Run(Unit target)
         {
             Owner.SetBusy(1.3f);
-            var boss = Boss;
             var start = Me.Position;
-            var through = (boss.Unit.Position - start);
+            var through = (target.Position - start);
             through.y = 0f;
-            var end = Arena.Clamp(boss.Unit.Position + through.normalized * (boss.Unit.Radius + 0.9f));
+            var end = Arena.Clamp(target.Position + through.normalized * (target.Radius + 0.9f));
 
             // Shadowstep
             const int steps = 6;
@@ -231,12 +230,12 @@ namespace ReadyCheck
             // Flurry
             for (int i = 0; i < 6; i++)
             {
-                if (Me.IsDead || boss.Unit.IsDead) yield break;
+                if (Me.IsDead || target.IsDead) yield break;
                 bool finisher = i == 5;
-                var toBoss = boss.Unit.Position - Me.Position;
+                var toBoss = target.Position - Me.Position;
                 float yaw = Mathf.Atan2(toBoss.x, toBoss.z) * Mathf.Rad2Deg + Random.Range(-50f, 50f);
                 var hitPoint = Me.Position + toBoss.normalized * 0.9f;
-                Owner.Deal(boss.Unit, finisher ? 60f : 24f, Name);
+                Owner.Deal(target, finisher ? 60f : 24f, Name);
                 FX.Slash(hitPoint, yaw, finisher ? new Color(1f, 0.95f, 0.8f) : Color, finisher ? 2.2f : 1.4f);
                 FX.Spray(hitPoint, toBoss, new Color(1f, 0.85f, 0.6f), finisher ? 12 : 5, 7f);
                 if (finisher)
@@ -244,7 +243,7 @@ namespace ReadyCheck
                     CameraRig.Shake(0.12f, 0.12f);
                     FX.HitStop(0.05f);
                 }
-                yield return new WaitForSeconds(finisher ? 0.1f : 0.1f);
+                yield return new WaitForSeconds(0.1f);
             }
         }
     }
@@ -259,25 +258,25 @@ namespace ReadyCheck
         public override string Name => "Meteor";
         public override string Short => "ME";
         public override float Cooldown => 20f;
-        public override string Description => "1s later: 300 damage explosion (BURN)";
+        public override string Description => "1s later: 300 damage to everything in the blast (BURN)";
         public override Color Color => new Color(1f, 0.5f, 0.15f);
         public override bool IsBurst => true;
         const float Radius = 2.2f;
 
-        protected override bool Prepare(bool forced) => DistToBossEdge <= PartyMember.SpellRange && !Boss.IsLeaping;
+        protected override bool Prepare(bool forced) => DistToTargetEdge <= PartyMember.SpellRange && !Boss.IsLeaping;
 
         protected override void Execute()
         {
-            var point = Boss.Unit.Position;
+            var point = Target.Position;
             Telegraph.Circle(point, Radius, Color, 1.1f);
             if (Random.value < 0.4f) Barks.Say(Me, BarkLines.Pick(BarkLines.Meteor), 1.8f);
             var owner = Owner;
-            var boss = Boss;
             FX.Meteor(point, 1.1f, () =>
             {
-                if (boss != null && !boss.Unit.IsDead &&
-                    Vector3.Distance(boss.Unit.Position, point) <= Radius + boss.Unit.Radius)
-                    owner.Deal(boss.Unit, 300f, "Meteor");
+                var hit = new List<Unit>();
+                foreach (var enemy in LivingEnemies())
+                    if (Vector3.Distance(enemy.Position, point) <= Radius + enemy.Radius) hit.Add(enemy);
+                foreach (var enemy in hit) owner.Deal(enemy, 300f, "Meteor");
                 Telegraph.Flash(point, 3f, new Color(1f, 0.6f, 0.2f), 0.5f);
                 FX.Glow(point, new Color(1f, 0.55f, 0.2f), 4f, 0.5f);
                 FX.Burst(point, new Color(1f, 0.75f, 0.3f), 30, 11f, 0.55f, 1.6f);
@@ -298,22 +297,20 @@ namespace ReadyCheck
         public override string Description => "6 curving missiles, 18 damage each";
         public override Color Color => new Color(0.78f, 0.5f, 1f);
 
-        protected override bool Prepare(bool forced) => DistToBossEdge <= PartyMember.SpellRange;
+        protected override bool Prepare(bool forced) => DistToTargetEdge <= PartyMember.SpellRange;
 
-        protected override void Execute() => Owner.StartCoroutine(Run());
+        protected override void Execute() => Owner.StartCoroutine(Run(Target));
 
-        IEnumerator Run()
+        IEnumerator Run(Unit target)
         {
             for (int i = 0; i < 6; i++)
             {
-                var boss = Boss;
-                if (Me.IsDead || boss == null || boss.Unit.IsDead) yield break;
-                var toBoss = boss.Unit.Position - Me.Position;
+                if (Me.IsDead || target == null || target.IsDead) yield break;
+                var toBoss = target.Position - Me.Position;
                 toBoss.y = 0f;
                 float side = (i % 2 == 0 ? 1f : -1f) * Random.Range(45f, 85f);
                 var launch = Quaternion.AngleAxis(side, Vector3.up) * toBoss.normalized * 11f;
                 var owner = Owner;
-                var target = boss.Unit;
                 Projectile.Fire(Me.Position, target, Color, 16f, () => owner.Deal(target, 18f, "Arcane Barrage"), launch, 0.8f, 0.5f);
                 FX.Burst(Me.Position, Color, 3, 3f, 0.25f);
                 yield return new WaitForSeconds(0.07f);
@@ -334,7 +331,7 @@ namespace ReadyCheck
 
         public Vector3 Destination;
 
-        protected override bool Prepare(bool forced) => Vector3.Distance(Me.Position, Destination) > 2.5f;
+        protected override bool Prepare(bool forced) => !Owner.IsHeld && Vector3.Distance(Me.Position, Destination) > 2.5f;
 
         protected override void Execute()
         {
@@ -358,19 +355,37 @@ namespace ReadyCheck
         public override string Name => "Piercing Lance";
         public override string Short => "PL";
         public override float Cooldown => 7f;
-        public override string Description => "Golden beam, 150 damage";
+        public override string Description => "Golden beam: 150 damage to everything it pierces";
         public override Color Color => new Color(1f, 0.88f, 0.4f);
         public override bool AutoUse => false;
         protected override float OpeningDelay => 0f;
 
-        protected override bool Prepare(bool forced) => DistToBossEdge <= LeaderController.AttackRange + 2f;
+        protected override bool Prepare(bool forced) => DistToTargetEdge <= LeaderController.AttackRange + 2f;
 
         protected override void Execute()
         {
-            var boss = Boss.Unit;
-            Owner.Deal(boss, 150f, Name);
-            FX.Beam(Me.Position, boss.Position, Color, 0.45f, 0.35f);
-            FX.Spray(boss.Position, boss.Position - Me.Position, Color, 16, 9f, 40f);
+            var target = Target;
+            var from = Me.Position;
+            var dir = target.Position - from;
+            dir.y = 0f;
+            dir.Normalize();
+            float length = Vector3.Distance(from, target.Position) + 3f;
+            var end = from + dir * length;
+
+            var hit = new List<Unit>();
+            foreach (var enemy in LivingEnemies())
+            {
+                var rel = enemy.Position - from;
+                rel.y = 0f;
+                float along = Mathf.Clamp(Vector3.Dot(rel, dir), 0f, length);
+                if (Vector3.Distance(from + dir * along, enemy.Position) <= enemy.Radius + 0.35f) hit.Add(enemy);
+            }
+            foreach (var enemy in hit)
+            {
+                Owner.Deal(enemy, 150f, Name);
+                FX.Spray(enemy.Position, dir, Color, 10, 9f, 40f);
+            }
+            FX.Beam(from, end, Color, 0.45f, 0.35f);
             CameraRig.Shake(0.1f, 0.12f);
             FX.HitStop(0.035f);
         }

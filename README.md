@@ -65,10 +65,14 @@ make sure `Scenes/Main` is in the scene list → **Build**. Run the resulting ex
 
 ---
 
-## How to play (first iteration)
+## How to play
 
-You're the **Raid Leader** (the one with the crown and the gold ring under your feet). With your party of four, you fight
-**Rotgut the Hungry**, an ogre with poor table manners. He enrages at **3:00**.
+You're the **Raid Leader** (the one with the crown and the gold ring under your feet). With your party of four you
+take on two bosses. On the **Ready Check** screen, press **RB** (gamepad) or **Tab** (keyboard) to switch between them.
+Each boss keeps its own attempts, best try and party familiarity.
+
+### Boss 1: Rotgut the Hungry (The Buffet Hall)
+An ogre with poor table manners. He enrages at **3:00**.
 
 | Mechanic | What happens | Your call |
 |---|---|---|
@@ -77,6 +81,27 @@ You're the **Raid Leader** (the one with the crown and the gold ring under your 
 | **Second Breakfast** | An interruptible cast (yellow cast bar). If he finishes eating, he heals and gets stronger (*Well Fed*). | Call **INTERRUPT** |
 | **Grease Fire** | Fire puddles appear under people. Members walk out on their own, but how fast depends on their **Awareness**. Grenn is a *Fire Enthusiast*... | Move out yourself |
 | **Phase 2 (50%)** | Everything happens more often. | Use **BURN** and **Rally** wisely |
+
+### Boss 2: Krakenna the Clingy (The Sunken Grotto)
+![Mock frame of the Krakenna fight, composed from the game's generated sprites](docs/images/krakenna-preview.png)
+
+A giant octopus who just wants a hug. She sits in the middle of the room with **eight named arms** (Gary, Hugsy,
+Lefty, Snacky, Tickles, Pointy, Waver and Sir Reginald). **Every arm is its own target with its own health bar,
+and you can break them off.** A broken arm flies off in pieces, rips **4% of her health** away and never attacks
+again. Losing all eight leaves her **Exposed** (+50% damage taken). She enrages at **4:00**.
+
+| Mechanic | What happens | Your call |
+|---|---|---|
+| **Tentacle Slam** | An arm rears up and a pink line appears on the floor; then it slams down the line. | Step out of the line. Your party dodges on their own, but low-Awareness members are sometimes late |
+| **Clingy Hug** | An arm grabs someone, lifts them and slowly reels them in. After 8 s they're squeezed and thrown across the room. | Call **FOCUS**: 450 damage to that arm frees them. If *you* are grabbed, press dodge to wriggle |
+| **Ink Cloud** | An interruptible cast. If it finishes, everyone gets an ink puddle that slows and burns. | Call **INTERRUPT** |
+| **Clingy Frenzy (70% and 40%)** | Every arm goes wild for 10 s and slams constantly, then an **Ink Tsunami** hits the whole raid for **110 damage per arm still attached**. | **FOCUS** arms down before and during it, then **DEFENSIVES** |
+
+The big decision is **when to break arms**. Every arm you break costs time against the enrage, but each one makes
+every slam, hug and tsunami weaker.
+
+The **FOCUS** call (RB / 7) puts a skull on an arm. It picks the arm hugging someone first, otherwise the arm
+nearest to you. Your damage dealers (and your Leader Bolt) switch to it until it breaks. **As You Were** clears it.
 
 ### Your raid
 
@@ -112,8 +137,10 @@ first pull you have to call almost everything. A few wipes later, people start h
 | Battle Rez (revive the last fallen ally, once per pull) | B | F |
 | **Quick Calls**: Stack / Spread / Interrupt / Burn | D-pad Up / Down / Left / Right | 1 / 2 / 3 / 4 |
 | Defensives / As You Were | Raid Wheel | 5 / 6 |
+| **FOCUS** (skull on an arm; damage dealers switch to it) | RB | 7 |
 | **Raid Wheel** (slows time to 20%) | Hold LB, aim with right stick, release to call | Hold Q or right mouse, move the mouse toward a call, release to call |
 | Ready Check & pull / one more pull | Start or A | Enter or Space |
+| Switch boss (on the Ready Check screen) | RB | Tab |
 | Toggle mechanic hints | Select | H |
 
 ---
@@ -128,7 +155,7 @@ Assets/
     Combat/                     units, buffs, projectiles, combat log
     Party/                      member data and roster, shared member logic, AI, leader controls
     Commands/                   raid calls (Stack, Spread, Interrupt, Burn, ...)
-    Boss/                       Rotgut, telegraphs, fire puddles
+    Boss/                       BossController base, Rotgut, Krakenna + her arms, boss roster, telegraphs, puddles
     Encounter/                  pull / wipe / victory flow, saved progress (familiarity)
     UI/                         HUD, call wheel, raid frames, speech bubbles and all the bark lines
 docs/GAME_DESIGN.md             game design document

@@ -264,6 +264,20 @@ namespace ReadyCheck
             go.AddComponent<FxMeteor>().Init(target, fallTime, onImpact);
         }
 
+        /// <summary>A sprite flung away: moves, spins, slows down and fades (severed tentacle bits).</summary>
+        public static void Debris(Sprite sprite, Vector3 pos, Vector3 velocity, float spinDegPerSec, float life)
+        {
+            var go = new GameObject("debris");
+            go.transform.SetParent(Parent(), false);
+            pos.y = 0.2f;
+            go.transform.position = pos;
+            go.transform.rotation = Flat;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.sortingOrder = 8;
+            go.AddComponent<FxDebris>().Init(sr, velocity, spinDegPerSec, life);
+        }
+
         // ----- Time --------------------------------------------------------------------------------
 
         /// <summary>A tiny freeze on big hits so they feel heavy.</summary>
@@ -300,6 +314,34 @@ namespace ReadyCheck
             }
             transform.localScale = Vector3.one * Mathf.Lerp(s0, s1, 1f - (1f - t) * (1f - t));
             sr.color = new Color(color.r, color.g, color.b, color.a * (1f - t));
+            if (t >= 1f) Destroy(gameObject);
+        }
+    }
+
+    public class FxDebris : MonoBehaviour
+    {
+        static readonly Quaternion Flat = Quaternion.Euler(90f, 0f, 0f);
+        SpriteRenderer sr;
+        Vector3 velocity;
+        float spin, angle, born, life;
+
+        public void Init(SpriteRenderer renderer, Vector3 vel, float spinSpeed, float lifetime)
+        {
+            sr = renderer;
+            velocity = vel;
+            spin = spinSpeed;
+            born = Time.time;
+            life = lifetime;
+        }
+
+        void Update()
+        {
+            float t = Mathf.Clamp01((Time.time - born) / life);
+            velocity *= Mathf.Max(0f, 1f - 3f * Time.deltaTime);
+            transform.position = Arena.Clamp(transform.position + velocity * Time.deltaTime) + Vector3.up * 0.2f;
+            angle += spin * Time.deltaTime * (1f - t);
+            transform.rotation = Quaternion.Euler(0f, angle, 0f) * Flat;
+            sr.color = new Color(0.85f, 0.75f, 0.8f, t < 0.6f ? 1f : (1f - t) / 0.4f);
             if (t >= 1f) Destroy(gameObject);
         }
     }

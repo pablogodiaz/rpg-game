@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ReadyCheck
 {
-    public enum RaidCall { Stack, Spread, Interrupt, Burn, Defensives, AsYouWere }
+    public enum RaidCall { Stack, Spread, Interrupt, Burn, Defensives, AsYouWere, Focus }
 
     public static class RaidCallInfo
     {
@@ -17,6 +17,7 @@ namespace ReadyCheck
                 case RaidCall.Burn: return "Burn";
                 case RaidCall.Defensives: return "Defensives";
                 case RaidCall.AsYouWere: return "As You Were";
+                case RaidCall.Focus: return "Focus";
                 default: return c.ToString();
             }
         }
@@ -31,6 +32,7 @@ namespace ReadyCheck
                 case RaidCall.Burn: return "BURN IT DOWN!";
                 case RaidCall.Defensives: return "DEFENSIVES NOW!";
                 case RaidCall.AsYouWere: return "As you were.";
+                case RaidCall.Focus: return "FOCUS!";
                 default: return c.ToString();
             }
         }
@@ -44,7 +46,8 @@ namespace ReadyCheck
                 case RaidCall.Interrupt: return "Nearest kicker interrupts";
                 case RaidCall.Burn: return "x2 damage + big abilities";
                 case RaidCall.Defensives: return "-40% damage + shields";
-                case RaidCall.AsYouWere: return "Cancel orders";
+                case RaidCall.AsYouWere: return "Cancel orders + focus";
+                case RaidCall.Focus: return "DPS hit the nearest arm";
                 default: return "";
             }
         }
@@ -68,6 +71,7 @@ namespace ReadyCheck
                 case RaidCall.Interrupt: return new Color(1f, 0.95f, 0.3f);
                 case RaidCall.Burn: return new Color(1f, 0.35f, 0.25f);
                 case RaidCall.Defensives: return new Color(0.4f, 0.8f, 1f);
+                case RaidCall.Focus: return new Color(1f, 0.4f, 0.65f);
                 default: return new Color(0.85f, 0.85f, 0.85f);
             }
         }
@@ -127,11 +131,24 @@ namespace ReadyCheck
                 return false;
             }
 
+            // FOCUS picks its target first, so it can say who (or fail gracefully on single-target bosses).
+            Unit focus = null;
+            if (call == RaidCall.Focus)
+            {
+                focus = PickFocus(enc);
+                if (focus == null)
+                {
+                    Barks.Say(leader.Unit, "Focus what? There's only one of them.", 1.8f, true);
+                    return false;
+                }
+            }
+
             float cd = RaidCallInfo.Cooldown(call);
             if (cd > 0f) readyAt[call] = Time.time + cd;
 
-            Shout(RaidCallInfo.Shout(call), RaidCallInfo.Color(call));
-            Barks.Say(leader.Unit, RaidCallInfo.Shout(call), 1.4f, true);
+            string shout = call == RaidCall.Focus ? $"FOCUS {focus.DisplayName.ToUpperInvariant()}!" : RaidCallInfo.Shout(call);
+            Shout(shout, RaidCallInfo.Color(call));
+            Barks.Say(leader.Unit, shout, 1.4f, true);
             CombatLog.RecordCall(RaidCallInfo.Name(call));
 
             switch (call)
@@ -151,9 +168,34 @@ namespace ReadyCheck
                     foreach (var member in enc.Party)
                         if (member.AI != null) member.AI.ClearOrder();
                     LeaderSpreadUntil = 0f;
+                    enc.ClearFocus();
+                    break;
+                case RaidCall.Focus:
+                    enc.SetFocus(focus);
+                    AckFromSomeone(enc, BarkLines.AckFocus);
                     break;
             }
             return true;
+        }
+
+        /// <summary>A grabbing arm first (save your friend), otherwise the intact extra target nearest the leader.</summary>
+        static Unit PickFocus(EncounterManager enc)
+        {
+            Unit best = null;
+            float bestScore = float.MaxValue;
+            foreach (var u in enc.Boss.ExtraTargets)
+            {
+                if (u == null || u.IsDead) continue;
+                float score = Vector3.Distance(u.Position, enc.Leader.Unit.Position);
+                var arm = u.GetComponent<KrakenArm>();
+                if (arm != null && arm.Grabbed != null) score -= 100f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = u;
+                }
+            }
+            return best;
         }
 
         static void AckFromSomeone(EncounterManager enc, string[] lines)
@@ -269,7 +311,7 @@ namespace ReadyCheck
             return 180f + (index - (count - 1) / 2f) * SpreadStep;
         }
 
-        public static Vector3 SpreadPoint(RotgutBoss boss, float angle)
+        public static Vector3 SpreadPoint(BossController boss, float angle)
         {
             var dir = Quaternion.AngleAxis(angle, Vector3.up) * boss.FacingDirection;
             return Arena.Clamp(boss.Unit.Position + dir * SpreadRadius);

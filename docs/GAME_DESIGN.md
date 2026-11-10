@@ -229,13 +229,26 @@ Each boss is built around **one primary call** it teaches, then remixes old ones
 
 | # | Boss (placeholder) | Teaches | Key mechanic | Parody flavor |
 |---|---|---|---|---|
-| 1 | Rotgut the Hungry | Move out of bad | Fire puddles, simple tank & spank | Spends the fight complaining the dungeon's catering is late |
-| 2 | Sister Vell | **Interrupt** | Casts a raid-wipe spell every 20s, must be kicked | Will not stop talking. Every interrupt cuts off a sentence |
-| 3 | The Twin Hounds | **Markers / Kill order** | Two bosses, kill within 10s of each other | Sibling rivalry: they insult each other between phases |
-| 4 | Gravemaw | **Tank Swap** | Stacking debuff on the active tank | Has survived so many balance patches it's self-aware about it |
-| 5 | The Conductor | **Spread / Stack** | Alternates between chain lightning (spread) and a meteor (stack) | Mechanics are timed to the boss music, which he is conducting |
-| 6 | Hive Queen | **Switch to adds** | Add waves heal the boss if they reach it | The adds are her unpaid interns |
-| 7 | The Clockwork Council | Everything | 3 bosses, rotating abilities, burn phase with an enrage timer | A literal committee. They pause the fight to vote on mechanics |
+| 1 | Rotgut the Hungry (**built**) | Stack, Spread, Interrupt | Belly Flop soak, Indigestion spread, Second Breakfast kick, grease fires | Spends the fight complaining the dungeon's catering is late |
+| 2 | Krakenna the Clingy (**built**) | **Focus / switch targets** | Eight breakable arms: slams, hugs (free the victim), Clingy Frenzy → Ink Tsunami scaled by arms left | Just wants a hug. Every arm has a name, and she grieves each one |
+| 3 | Sister Vell | **Interrupt** | Casts a raid-wipe spell every 20s, must be kicked | Will not stop talking. Every interrupt cuts off a sentence |
+| 4 | The Twin Hounds | **Markers / Kill order** | Two bosses, kill within 10s of each other | Sibling rivalry: they insult each other between phases |
+| 5 | Gravemaw | **Tank Swap** | Stacking debuff on the active tank | Has survived so many balance patches it's self-aware about it |
+| 6 | The Conductor | **Spread / Stack** | Alternates between chain lightning (spread) and a meteor (stack) | Mechanics are timed to the boss music, which he is conducting |
+| 7 | Hive Queen | **Switch to adds** | Add waves heal the boss if they reach it | The adds are her unpaid interns |
+| 8 | The Clockwork Council | Everything | 3 bosses, rotating abilities, burn phase with an enrage timer | A literal committee. They pause the fight to vote on mechanics |
+
+### Krakenna the Clingy (boss 2) in detail
+- **Arms as targets:** each of the eight arms is a separate unit (800 HP) drawn as a swaying chain of tentacle
+  segments. Breaking one removes its attacks, deals 4% of Krakenna's max HP and announces its name
+  ("NOT GARY!"). All eight broken → Exposed (+50% damage taken).
+- **Tentacle Slam:** the arm pointing closest to a random member rears up and telegraphs a 9.5 m line. AI
+  members dodge with a reaction time based on Awareness and Familiarity, plus some randomness for low Awareness.
+- **Clingy Hug:** grabs a non-tank, lifts them and reels them in. 450 damage to that arm frees them; after 8 s they're
+  squeezed (600) and thrown. Teaches the new **FOCUS** call; aware damage dealers go to the rescue on their own.
+- **Ink Cloud:** interruptible. Otherwise every member gets an ink puddle (slow + small burn).
+- **Clingy Frenzy** at 70% / 40%: a 10 s channel of constant slams, then **Ink Tsunami** = 110 x arms still attached.
+  The fight's core decision is how many arms to break versus how fast to burn the body.
 
 **Boss rules**
 - Every dangerous attack has a **clear telegraph** (visual and audio) with enough lead time to make a call.
@@ -405,6 +418,12 @@ roster instead of ScriptableObjects, PlayerPrefs saves.
 Added class kits (see section 3.5), an effects system (pooled particles, floating numbers and callouts, beams,
 slashes, afterimages, meteors, hit-stop), crits, absorb shields, Battle Rez, buff auras, and the BURN/DEFENSIVES
 calls firing abilities. Raid frames show each member's ability cooldowns.
+
+### Iteration 3: second boss (done)
+Bosses now share a `BossController` base (casting, interrupts, threat, enrage, barks) and live in a `BossRoster`,
+selectable on the Ready Check screen. Added **Krakenna the Clingy** with breakable arms, the **FOCUS** call and skull
+marker, line-shaped danger telegraphs the AI dodges, ink puddles that slow, being grabbed (leader can wriggle free),
+a sunken-grotto arena theme, and per-boss saves, loot and lines.
 
 ### Next up (suggested)
 1. Playtest and tune Rotgut (damage numbers, timings, Awareness/Familiarity curve).

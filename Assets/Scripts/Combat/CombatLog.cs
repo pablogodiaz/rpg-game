@@ -48,7 +48,7 @@ namespace ReadyCheck
             if (source != null) Get(source).Damage += amount;
             var t = Get(target);
             t.DamageTaken += amount;
-            if (ability == FirePuddle.AbilityName) t.FireTicks++;
+            if (FirePuddle.IsPuddleAbility(ability)) t.FireTicks++;
         }
 
         public static void RecordHeal(Unit source, Unit target, float amount)

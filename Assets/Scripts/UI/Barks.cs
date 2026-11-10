@@ -87,7 +87,9 @@ namespace ReadyCheck
             {
                 case MechanicKind.BellyFlop: return "It's Belly Flop! STACK! ...see? I'm right sometimes.";
                 case MechanicKind.Indigestion: return "Indigestion! SPREAD! Write that down.";
-                case MechanicKind.SecondBreakfast: return "He's eating! Someone KICK! (Not me.)";
+                case MechanicKind.InterruptibleCast: return "It's casting! Someone KICK! (Not me.)";
+                case MechanicKind.ArmGrab: return "FOCUS THAT ARM! ...see? I'm basically the raid leader.";
+                case MechanicKind.Frenzy: return "Break the arms! The arms! I said arms first!";
                 default: return "Do the thing!";
             }
         }
@@ -96,6 +98,26 @@ namespace ReadyCheck
         public static readonly string[] Wipe = { "Lag.", "That was the healer.", "That was NOT the healer.", "One more pull?", "My cat walked on the keyboard.", "We almost had him!" };
         public static readonly string[] WipeTilt = { "I can't heal stupid.", "I'm fine. This is fine.", "...I need a minute.", "Was that my fault? Don't answer." };
         public static readonly string[] Victory = { "GG!", "Screenshot! Everyone jump on him!", "Loot! Loot! Loot!", "Who's writing the guild post?" };
+
+        // ----- Krakenna the Clingy -----
+        public static readonly string[] KrakenPull = { "Visitors! Come here, I just want a HUG!", "Eight arms and nobody to hold... until NOW.", "Oh, you came! Did you bring snacks? Or yourselves?" };
+        public static readonly string[] KrakenRetry = { "You came back! I KNEW you liked me!", "Again? This is basically a date.", "Gary missed you. Well, what's left of Gary." };
+        public static readonly string[] KrakenKill = { "Mine now. Forever.", "Hugged too hard. Again.", "Shh. Sleep now." };
+        public static readonly string[] KrakenWipe = { "Don't go! ...fine, go. Come back soon!", "Same time next week? I'll save you a hug.", "I'll keep the ink warm." };
+        public static readonly string[] KrakenDeath = { "Nobody... ever... hugs back...", "Tell Gary... I'm sorry...", "At least... the bow... survived..." };
+        public static readonly string[] KrakenInterrupted = { "Rude! I was inking!", "You ruined the mood!", "My ink! I was saving that!" };
+        public static readonly string[] KrakenSlam = { "SLAP!", "Tentacle time!", "Incoming affection!" };
+        public static readonly string[] KrakenGrab = { "Gotcha! You're mine now!", "HUG TIME!", "Don't squirm, it only makes it tighter!" };
+        /// <summary>{0} = arm name, {1} = arms left.</summary>
+        public static readonly string[] KrakenArmLost = { "Not {0}! {0} was my FAVORITE!", "That arm had a NAME! It was {0}!", "I still have {1} more, you know!", "{0}, NOOO! Do you know how long that takes to grow back?" };
+        public static readonly string[] KrakenInk = { "Let me set the mood...", "Ink cloud! Very romantic.", "Lights off, everyone!" };
+        public static readonly string[] KrakenFrenzy = { "WHY WON'T YOU LET ME HOLD YOU?!", "ALL ARMS ON DECK!", "HUG ATTACK! HUG ATTACK!" };
+
+        public static readonly string[] Grabbed = { "IT'S SO CLINGY! HELP!", "Personal space! PERSONAL SPACE!", "Someone hit this arm!", "It's... kind of warm. HELP ANYWAY!" };
+        public static readonly string[] Freed = { "Free! I'm free!", "Ew. Suction marks.", "Thanks! I owe you one." };
+        public static readonly string[] AckFocus = { "On it!", "Switching!", "Calamari time!", "Hitting the arm!" };
+        /// <summary>{0} = grabbed member.</summary>
+        public static readonly string[] Rescue = { "Hang on, {0}!", "I've got you, {0}!", "Let go of {0}!" };
 
         public static readonly string[] BossPull = { "Is it lunch? It smells like lunch.", "Visitors! Did anyone bring snacks?", "Ah. Appetizers." };
         public static readonly string[] BossRetry = { "Back again? I've rearranged the furniture.", "You again! Did you bring a better healer?", "Round two. Or is it twelve?" };

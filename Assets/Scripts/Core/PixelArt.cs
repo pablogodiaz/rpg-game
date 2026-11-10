@@ -409,6 +409,99 @@ namespace ReadyCheck
             return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
         });
 
+        /// <summary>A white 1 x 1 world-unit square, pivot at the bottom center (for line telegraphs).</summary>
+        public static Sprite Square() => Cached("square", () =>
+        {
+            var cv = new PixelCanvas(4, 4);
+            for (int i = 0; i < 16; i++) cv.Px[i] = new Color32(255, 255, 255, 255);
+            return cv.ToSprite(4f, new Vector2(0.5f, 0f));
+        });
+
+        /// <summary>The skull raid marker drawn over the focus target.</summary>
+        public static Sprite Skull() => Cached("skull", () =>
+        {
+            var cv = new PixelCanvas(11, 12);
+            cv.Part(Circle(5.5f, 7f, 4.2f), new Color32(240, 236, 226, 255), true, false);
+            cv.Part(Box(3f, 1.5f, 8f, 4f), new Color32(240, 236, 226, 255), true, false);
+            cv.Part(Circle(3.8f, 6.6f, 1.2f), new Color32(30, 26, 38, 255), false, false);
+            cv.Part(Circle(7.2f, 6.6f, 1.2f), new Color32(30, 26, 38, 255), false, false);
+            cv.Part(Box(4.6f, 1.5f, 5.4f, 3.4f), new Color32(30, 26, 38, 255), false, false);
+            return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
+        });
+
+        static readonly Color32 KrakenSkin = new Color32(176, 78, 124, 255);
+
+        /// <summary>Krakenna's head seen from above: a big mantle with a bow, eyes and lipstick, facing up.</summary>
+        public static Sprite Kraken() => Cached("kraken", () =>
+        {
+            const int s = 56;
+            var cv = new PixelCanvas(s, s);
+            var spot = new Color32(214, 120, 160, 255);
+            var white = new Color32(242, 238, 224, 255);
+            var dark = new Color32(30, 26, 38, 255);
+            var pink = new Color32(255, 140, 190, 255);
+
+            cv.Part(Ellipse(28f, 24f, 17f, 20f), KrakenSkin);                    // mantle
+            foreach (var sp in new[] { new Vector2(20, 18), new Vector2(34, 14), new Vector2(27, 9), new Vector2(38, 25), new Vector2(17, 28), new Vector2(29, 21) })
+                cv.Part(Circle(sp.x, sp.y, 1.6f), spot, false, false);
+            cv.Part(Ellipse(22f, 8f, 4.5f, 3f), pink);                          // bow
+            cv.Part(Ellipse(34f, 8f, 4.5f, 3f), pink);
+            cv.Part(Circle(28f, 8f, 1.8f), Shade(pink, 0.8f, 0));
+            cv.Part(Circle(20.5f, 35f, 4.4f), white);                           // eyes
+            cv.Part(Circle(35.5f, 35f, 4.4f), white);
+            cv.Part(Box(18f, 34.2f, 23f, 35.8f), dark, false, false);           // goat pupils
+            cv.Part(Box(33f, 34.2f, 38f, 35.8f), dark, false, false);
+            cv.Part(Box(16f, 39.6f, 18f, 40.4f), dark, false, false);           // lashes
+            cv.Part(Box(38f, 39.6f, 40f, 40.4f), dark, false, false);
+            cv.Part(Ellipse(28f, 42f, 3.4f, 1.8f), new Color32(236, 70, 110, 255)); // lipstick
+            return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
+        });
+
+        /// <summary>One round tentacle segment with a sucker, size in pixels.</summary>
+        public static Sprite TentacleSegment(int size) => Cached("tentacle_" + size, () =>
+        {
+            int canvas = size + 2;
+            var cv = new PixelCanvas(canvas, canvas);
+            float c = canvas / 2f;
+            cv.Part(Circle(c, c, size / 2f - 0.2f), KrakenSkin);
+            if (size >= 8) cv.Part(Circle(c, c, Mathf.Max(1f, size * 0.17f)), new Color32(238, 176, 196, 255), false, false);
+            return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
+        });
+
+        /// <summary>Ink puddle frames, sized so the sprite is exactly 2 x radius across.</summary>
+        public static Sprite[] InkFrames(float radius)
+        {
+            const int frameCount = 3;
+            var frames = new Sprite[frameCount];
+            for (int f = 0; f < frameCount; f++)
+            {
+                int frame = f;
+                frames[f] = Cached($"ink_{radius:0.00}_{frame}", () =>
+                {
+                    int size = Mathf.Max(8, Mathf.RoundToInt(radius * 2f * PPU));
+                    var cv = new PixelCanvas(size, size);
+                    var rng = new System.Random(4321 + frame * 31);
+                    float c = size / 2f;
+                    for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(c, c)) / (c - 0.5f);
+                        if (d > 1f) continue;
+                        double n = rng.NextDouble();
+                        if (d > 0.75f && n < 0.4) continue;
+                        Color32 col;
+                        if (n > 0.97) col = new Color32(150, 120, 210, 220);          // glossy highlights
+                        else if (d < 0.5f) col = new Color32(26, 18, 40, 225);
+                        else if (d < 0.8f) col = new Color32(44, 30, 66, 205);
+                        else col = new Color32(72, 50, 104, 180);
+                        cv.Px[y * size + x] = col;
+                    }
+                    return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
+                });
+            }
+            return frames;
+        }
+
         // ----- Arena -------------------------------------------------------------------------------
 
         enum TileKind { Floor, Wall, Void }
@@ -424,21 +517,48 @@ namespace ReadyCheck
             return TileKind.Void;
         }
 
-        /// <summary>The whole arena as one tile map texture: metal floor plates inside a ring of rock walls.</summary>
-        public static Sprite ArenaFloor() => Cached("arena", () =>
+        /// <summary>Colors for one arena look.</summary>
+        class FloorPalette
         {
+            public Color32 Plate, Panel, Vent, VentSlot, Wall, WallTop, WallBottom, WallLeft, WallRight, Void, VoidSpeck;
+        }
+
+        static FloorPalette PaletteFor(ArenaTheme theme)
+        {
+            if (theme == ArenaTheme.SunkenGrotto)
+                return new FloorPalette
+                {
+                    Plate = new Color32(50, 74, 82, 255), Panel = new Color32(42, 62, 72, 255),
+                    Vent = new Color32(32, 50, 60, 255), VentSlot = new Color32(18, 32, 42, 255),
+                    Wall = new Color32(66, 86, 98, 255), WallTop = new Color32(96, 124, 134, 255),
+                    WallBottom = new Color32(36, 50, 60, 255), WallLeft = new Color32(88, 114, 124, 255),
+                    WallRight = new Color32(40, 54, 64, 255), Void = new Color32(10, 20, 30, 255),
+                    VoidSpeck = new Color32(24, 46, 60, 255),
+                };
+            return new FloorPalette
+            {
+                Plate = new Color32(70, 68, 84, 255), Panel = new Color32(58, 56, 70, 255),
+                Vent = new Color32(46, 44, 56, 255), VentSlot = new Color32(28, 26, 36, 255),
+                Wall = new Color32(98, 90, 106, 255), WallTop = new Color32(128, 120, 138, 255),
+                WallBottom = new Color32(58, 52, 66, 255), WallLeft = new Color32(122, 114, 132, 255),
+                WallRight = new Color32(62, 56, 70, 255), Void = new Color32(22, 18, 28, 255),
+                VoidSpeck = new Color32(38, 34, 46, 255),
+            };
+        }
+
+        /// <summary>The whole arena as one tile map texture: floor plates inside a ring of rock walls.</summary>
+        public static Sprite ArenaFloor(ArenaTheme theme = ArenaTheme.BuffetHall) => Cached("arena_" + theme, () =>
+        {
+            var pal = PaletteFor(theme);
             const int tp = TilePixels;
             int size = ArenaTiles * tp;
             var cv = new PixelCanvas(size, size);
-            float half = ArenaTiles / 2f;
 
             for (int ty = 0; ty < ArenaTiles; ty++)
             for (int tx = 0; tx < ArenaTiles; tx++)
             {
                 var kind = KindAt(tx, ty);
                 var rng = new System.Random(tx * 73856093 ^ ty * 19349663);
-                float wx = tx + 0.5f - half, wz = ty + 0.5f - half;
-                float dist = Mathf.Sqrt(wx * wx + wz * wz);
                 int variant = rng.Next(100);
 
                 for (int ly = 0; ly < tp; ly++)
@@ -449,21 +569,23 @@ namespace ReadyCheck
                     switch (kind)
                     {
                         case TileKind.Floor:
-                            col = FloorPixel(lx, ly, tp, variant, dist);
+                            col = FloorPixel(lx, ly, tp, variant, pal);
+                            if (theme == ArenaTheme.SunkenGrotto && variant >= 92 && variant < 97 && rng.Next(5) == 0)
+                                col = new Color32(70, 120, 132, 255); // glints of water
                             if (KindAt(tx, ty + 1) == TileKind.Wall && ly >= tp - 4) col = Shade(col, 0.6f, 0);
                             else if (KindAt(tx - 1, ty) == TileKind.Wall && lx <= 2) col = Shade(col, 0.72f, 0);
                             break;
                         case TileKind.Wall:
                             noise = rng.Next(-7, 8);
-                            col = new Color32(98, 90, 106, 255);
+                            col = pal.Wall;
                             if (ly == 0 || lx == tp - 1) col = Shade(col, 0.9f, 0);
-                            if (KindAt(tx, ty + 1) != TileKind.Wall && ly >= tp - 2) col = new Color32(128, 120, 138, 255);
-                            else if (KindAt(tx, ty - 1) != TileKind.Wall && ly <= 1) col = new Color32(58, 52, 66, 255);
-                            else if (KindAt(tx - 1, ty) != TileKind.Wall && lx == 0) col = new Color32(122, 114, 132, 255);
-                            else if (KindAt(tx + 1, ty) != TileKind.Wall && lx == tp - 1) col = new Color32(62, 56, 70, 255);
+                            if (KindAt(tx, ty + 1) != TileKind.Wall && ly >= tp - 2) col = pal.WallTop;
+                            else if (KindAt(tx, ty - 1) != TileKind.Wall && ly <= 1) col = pal.WallBottom;
+                            else if (KindAt(tx - 1, ty) != TileKind.Wall && lx == 0) col = pal.WallLeft;
+                            else if (KindAt(tx + 1, ty) != TileKind.Wall && lx == tp - 1) col = pal.WallRight;
                             break;
                         default:
-                            col = rng.Next(60) == 0 ? new Color32(38, 34, 46, 255) : new Color32(22, 18, 28, 255);
+                            col = rng.Next(60) == 0 ? pal.VoidSpeck : pal.Void;
                             noise = 0;
                             break;
                     }
@@ -475,21 +597,21 @@ namespace ReadyCheck
             return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
         });
 
-        static Color32 FloorPixel(int lx, int ly, int tp, int variant, float dist)
+        static Color32 FloorPixel(int lx, int ly, int tp, int variant, FloorPalette pal)
         {
             bool lightEdge = lx == 0 || ly == tp - 1;
             bool darkEdge = lx == tp - 1 || ly == 0;
             bool inset = lx >= 2 && lx <= tp - 3 && ly >= 2 && ly <= tp - 3;
 
             Color32 baseCol;
-            if (variant < 8) baseCol = new Color32(46, 44, 56, 255);       // vents
-            else if (variant < 26) baseCol = new Color32(58, 56, 70, 255); // dark panels
-            else baseCol = new Color32(70, 68, 84, 255);                   // metal plates
+            if (variant < 8) baseCol = pal.Vent;                            // vents
+            else if (variant < 26) baseCol = pal.Panel;                    // dark panels
+            else baseCol = pal.Plate;                                      // plates
 
             if (lightEdge) return Shade(baseCol, 1.2f, 6);
             if (darkEdge) return Shade(baseCol, 0.74f, 0);
 
-            if (variant < 8 && inset && ly % 3 == 1) return new Color32(28, 26, 36, 255);
+            if (variant < 8 && inset && ly % 3 == 1) return pal.VentSlot;
             if (variant >= 8 && variant < 26 && inset &&
                 (lx == 2 || lx == tp - 3 || ly == 2 || ly == tp - 3))
                 return Shade(baseCol, 1.25f, 4);
@@ -498,12 +620,12 @@ namespace ReadyCheck
         }
 
         /// <summary>A lamp block set into the wall.</summary>
-        public static Sprite Lamp() => Cached("lamp", () =>
+        public static Sprite Lamp(Color32 core) => Cached($"lamp_{core.r}_{core.g}_{core.b}", () =>
         {
             var cv = new PixelCanvas(14, 14);
             cv.Part(Box(1.5f, 1.5f, 12.5f, 12.5f), new Color32(88, 90, 104, 255));
-            cv.Part(Circle(7f, 7f, 3f), new Color32(255, 186, 96, 255), true, false);
-            cv.Part(Circle(7f, 7f, 1.4f), new Color32(255, 240, 190, 255), false, false);
+            cv.Part(Circle(7f, 7f, 3f), core, true, false);
+            cv.Part(Circle(7f, 7f, 1.4f), new Color32(255, 248, 225, 255), false, false);
             return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
         });
     }
