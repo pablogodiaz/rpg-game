@@ -34,7 +34,11 @@ namespace ReadyCheck
         [Range(0f, 1f)] public float Awareness = 0.4f;
         public List<Trait> Traits = new List<Trait>();
 
+        /// <summary>Chance for a hit to crit (double damage, big yellow number).</summary>
+        public float CritChance = 0.1f;
+
         public bool CanInterrupt;
+        public string InterruptName = "Kick";
         public float InterruptCooldown = 15f;
         /// <summary>Distance from the boss's edge needed to interrupt.</summary>
         public float InterruptRange = 1.2f;
@@ -97,7 +101,7 @@ namespace ReadyCheck
             {
                 new MemberProfile
                 {
-                    Name = "You", Class = ClassKind.Leader, Role = Role.Ranged, MaxHealth = 1150f, Awareness = 1f,
+                    Name = "You", Class = ClassKind.Leader, Role = Role.Ranged, MaxHealth = 1150f, Awareness = 1f, CritChance = 0.15f,
                     Hair = new Color32(60, 40, 30, 255), Primary = new Color32(64, 84, 170, 255),
                     Secondary = new Color32(46, 46, 78, 255), Accent = new Color32(244, 204, 64, 255),
                 },
@@ -120,7 +124,7 @@ namespace ReadyCheck
                 {
                     Name = "Vex", Class = ClassKind.Duelist, Role = Role.Melee, MaxHealth = 1100f, Awareness = 0.5f,
                     Traits = new List<Trait> { Trait.Clutch },
-                    CanInterrupt = true, InterruptCooldown = 15f, InterruptRange = 1.3f,
+                    CanInterrupt = true, InterruptCooldown = 15f, InterruptRange = 1.3f, CritChance = 0.25f,
                     Skin = new Color32(176, 124, 92, 255), Hair = new Color32(30, 30, 40, 255),
                     Primary = new Color32(60, 70, 60, 255), Secondary = new Color32(40, 44, 40, 255),
                     Accent = new Color32(200, 60, 60, 255),
@@ -129,7 +133,7 @@ namespace ReadyCheck
                 {
                     Name = "Moira", Class = ClassKind.Mage, Role = Role.Ranged, MaxHealth = 1050f, Awareness = 0.3f,
                     Traits = new List<Trait> { Trait.BackseatLeader },
-                    CanInterrupt = true, InterruptCooldown = 24f, InterruptRange = 10f,
+                    CanInterrupt = true, InterruptCooldown = 24f, InterruptRange = 10f, InterruptName = "Counterspell",
                     Hair = new Color32(200, 80, 160, 255), Primary = new Color32(120, 60, 170, 255),
                     Secondary = new Color32(70, 40, 100, 255), Accent = new Color32(90, 70, 200, 255),
                 },

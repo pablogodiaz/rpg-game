@@ -18,6 +18,8 @@ namespace ReadyCheck
         public InputAction Attack { get; private set; }
         public InputAction Dodge { get; private set; }
         public InputAction Rally { get; private set; }
+        public InputAction Lance { get; private set; }
+        public InputAction BattleRez { get; private set; }
         public InputAction Wheel { get; private set; }
         public InputAction CallStack { get; private set; }
         public InputAction CallSpread { get; private set; }
@@ -71,6 +73,8 @@ namespace ReadyCheck
             Attack = Button("Attack", "<Gamepad>/rightTrigger", "<Mouse>/leftButton", "<Keyboard>/j");
             Dodge = Button("Dodge", "<Gamepad>/buttonSouth", "<Keyboard>/space");
             Rally = Button("Rally", "<Gamepad>/buttonNorth", "<Keyboard>/r");
+            Lance = Button("PiercingLance", "<Gamepad>/buttonWest", "<Keyboard>/e");
+            BattleRez = Button("BattleRez", "<Gamepad>/buttonEast", "<Keyboard>/f");
             Wheel = Button("RaidWheel", "<Gamepad>/leftShoulder", "<Keyboard>/q", "<Mouse>/rightButton");
 
             CallStack = Button("CallStack", "<Gamepad>/dpad/up", "<Keyboard>/1");

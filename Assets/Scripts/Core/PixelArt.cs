@@ -370,6 +370,45 @@ namespace ReadyCheck
             return frames;
         }
 
+        /// <summary>A 2x2 pixel square, the basic particle.</summary>
+        public static Sprite Particle() => Cached("particle", () =>
+        {
+            var cv = new PixelCanvas(2, 2);
+            for (int i = 0; i < 4; i++) cv.Px[i] = new Color32(255, 255, 255, 255);
+            return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
+        });
+
+        /// <summary>A crescent slash arc (2 x 1 world units, opening downward), smooth like a vector effect.</summary>
+        public static Sprite SlashArc() => Cached("slash", () =>
+        {
+            const int w = 64, h = 32;
+            var cv = new PixelCanvas(w, h);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float px = x + 0.5f, py = y + 0.5f;
+                float outer = ((px - 32f) / 31f) * ((px - 32f) / 31f) + (py / 30f) * (py / 30f);
+                float inner = ((px - 32f) / 26f) * ((px - 32f) / 26f) + ((py + 4f) / 24f) * ((py + 4f) / 24f);
+                if (outer <= 1f && inner > 1f)
+                {
+                    float edge = Mathf.Clamp01(1f - Mathf.Abs(px - 32f) / 32f); // fade toward the tips
+                    cv.Px[y * w + x] = new Color32(255, 255, 255, (byte)(255f * edge));
+                }
+            }
+            return cv.ToSprite(32f, new Vector2(0.5f, 0.25f), FilterMode.Bilinear);
+        });
+
+        /// <summary>A flaming meteor rock seen from above.</summary>
+        public static Sprite Meteor() => Cached("meteor", () =>
+        {
+            var cv = new PixelCanvas(16, 16);
+            cv.Part(Circle(8f, 8f, 6f), new Color32(255, 140, 50, 255), false, false);
+            cv.Part(Circle(8f, 8f, 4.6f), new Color32(96, 70, 64, 255));
+            cv.Part(Circle(6.5f, 9.5f, 1.2f), new Color32(255, 196, 90, 255), false, false);
+            cv.Part(Circle(9.8f, 6.8f, 1f), new Color32(255, 160, 70, 255), false, false);
+            return cv.ToSprite(PPU, new Vector2(0.5f, 0.5f));
+        });
+
         // ----- Arena -------------------------------------------------------------------------------
 
         enum TileKind { Floor, Wall, Void }

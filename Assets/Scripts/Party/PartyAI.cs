@@ -149,6 +149,7 @@ namespace ReadyCheck
             if (enc == null || m.Unit.IsDead || enc.State != EncounterState.Fighting) return;
             var boss = enc.Boss;
             if (boss == null) return;
+            if (m.IsBusy) return; // mid-ability (e.g. Blade Flurry)
 
             Vector3 desired = DefaultPosition(boss);
             float stop = 0.25f;
@@ -185,6 +186,7 @@ namespace ReadyCheck
             }
 
             // Standing-in-fire reflex. How fast it kicks in depends on Awareness (and traits).
+            bool urgent = CurrentOrder != OrderKind.None;
             var fire = FirePuddle.At(m.Unit.Position, -0.1f);
             if (fire != null)
             {
@@ -198,6 +200,7 @@ namespace ReadyCheck
                 {
                     desired = EscapePoint(fire, desired);
                     stop = 0.05f;
+                    urgent = true;
                 }
             }
             else
@@ -211,8 +214,19 @@ namespace ReadyCheck
                 }
             }
 
+            // Mages blink instead of walking when it matters.
+            if (urgent && m.Blink != null && m.Blink.Ready && Vector3.Distance(m.Unit.Position, desired) > 3f)
+            {
+                m.Blink.Destination = desired;
+                m.Blink.TryUse(true);
+            }
+
             m.MoveTowards(desired, stop);
             m.TickCombat(Time.deltaTime);
+
+            // Signature abilities: at most one per frame, in kit order (most important first).
+            foreach (var ability in m.Abilities)
+                if (ability.AutoUse && ability.TryUse()) break;
 
             if (m.Profile.Has(Trait.BackseatLeader) && Time.time >= nextBackseatBark)
             {

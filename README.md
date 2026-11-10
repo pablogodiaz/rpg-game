@@ -78,6 +78,23 @@ You're the **Raid Leader** (the one with the crown and the gold ring under your 
 | **Grease Fire** | Fire puddles appear under people. Members walk out on their own, but how fast depends on their **Awareness**. Grenn is a *Fire Enthusiast*... | Move out yourself |
 | **Phase 2 (50%)** | Everything happens more often. | Use **BURN** and **Rally** wisely |
 
+### Your raid
+
+![Mock frame of the abilities in action, composed from the game's generated sprites](docs/images/abilities-preview.png)
+
+| Member | Signature abilities (used on their own, with visible effects) | Interrupt |
+|---|---|---|
+| **Grenn** (Guardian, tank) | **Taunt**: yellow tether, yanks Rotgut back when he turns on someone · **Shield Slam**: shockwave, big threat, staggers the boss · **Bulwark**: golden shield bubble, -55% damage (fires on DEFENSIVES) | - |
+| **Pip** (Cleric, healer) | **Divine Shield**: cyan bubble that absorbs 450 damage on whoever is about to die (DEFENSIVES) · **Holy Nova**: expanding ring that heals everyone nearby | - |
+| **Vex** (Duelist, melee) | **Blade Flurry**: shadowsteps through the boss leaving afterimages, then 6 slashes and a finisher (BURN). Highest crit chance | Kick |
+| **Moira** (Mage, ranged) | **Meteor**: a meteor drops out of the sky for a big explosion (BURN) · **Arcane Barrage**: 6 missiles that curve into the boss · **Blink**: teleports out of fire and into stacks instead of walking | Counterspell |
+| **You** (Raid Leader) | **Piercing Lance**: golden beam · **Rally**: +30% party damage shockwave · **Battle Rez**: brings back the last fallen ally (once per pull) | - |
+
+Every hit shows a damage number (crits are big and yellow), every ability shouts its name over the caster's head,
+and buffs are visible on the units: a fiery glow for BURN, a gold glow for Rally and shield bubbles for absorbs.
+Your **BURN** call makes Vex and Moira fire their big abilities immediately, and **DEFENSIVES** makes Grenn and
+Pip pop their shields. Your calls now come with fireworks.
+
 **Your party learns.** Every member has an **Awareness** stat (how often and how fast they react without
 a call), plus a **familiarity** score with Rotgut that goes up after *every* pull, win or wipe. On your
 first pull you have to call almost everything. A few wipes later, people start handling mechanics on their own
@@ -90,7 +107,9 @@ first pull you have to call almost everything. A few wipes later, people start h
 | Move | Left stick | WASD / arrow keys |
 | Attack (Leader Bolt, auto-targets the boss) | RT (hold) | Left mouse / J (hold) |
 | Dodge (brief invulnerability) | A | Space |
+| Piercing Lance (golden beam, 7 s cooldown) | X | E |
 | Rally (+30% party damage, 90 s cooldown) | Y | R |
+| Battle Rez (revive the last fallen ally, once per pull) | B | F |
 | **Quick Calls**: Stack / Spread / Interrupt / Burn | D-pad Up / Down / Left / Right | 1 / 2 / 3 / 4 |
 | Defensives / As You Were | Raid Wheel | 5 / 6 |
 | **Raid Wheel** (slows time to 20%) | Hold LB, aim with right stick, release to call | Hold Q or right mouse, move the mouse toward a call, release to call |

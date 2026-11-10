@@ -25,6 +25,7 @@ namespace ReadyCheck
 
             var root = new GameObject("ReadyCheck");
             root.AddComponent<GameInput>();
+            root.AddComponent<FX>();
             root.AddComponent<CommandSystem>();
             root.AddComponent<Barks>();
             root.AddComponent<HUD>();

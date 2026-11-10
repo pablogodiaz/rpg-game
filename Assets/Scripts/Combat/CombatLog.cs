@@ -10,6 +10,7 @@ namespace ReadyCheck
         public float DamageTaken;
         public int FireTicks;
         public int Interrupts;
+        public int AbilitiesUsed;
         public string DeathCause;
         public float DeathTime = -1f;
     }
@@ -58,6 +59,11 @@ namespace ReadyCheck
         public static void RecordInterrupt(Unit source)
         {
             if (source != null) Get(source).Interrupts++;
+        }
+
+        public static void RecordAbility(Unit unit, string ability)
+        {
+            if (unit != null) Get(unit).AbilitiesUsed++;
         }
 
         public static void RecordDeath(Unit unit, string cause)

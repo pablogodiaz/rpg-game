@@ -57,6 +57,7 @@ namespace ReadyCheck
             Teardown();
             TimeController.SetSlowMo(false);
             Barks.Clear();
+            FX.Clear();
             Root = new GameObject("Encounter").transform;
             CombatLog.Reset();
             if (CommandSystem.Instance != null) CommandSystem.Instance.ResetState();
@@ -111,6 +112,7 @@ namespace ReadyCheck
             member.Index = index;
             member.IsLeader = profile.Class == ClassKind.Leader;
             member.Familiarity = Familiarity.Get(RotgutBoss.BossId, profile.Name);
+            member.SetupAbilities();
 
             var visual = UnitVisual.Create(unit, PixelArt.Character(profile), PixelArt.Foot(profile.Secondary, false),
                 0.3f, 0.22f, 10, 0f);
@@ -236,6 +238,7 @@ namespace ReadyCheck
             PartyMember tank = null;
             foreach (var p in Party)
                 if (p.Profile.Role == Role.Tank) tank = p;
+            foreach (var p in Party) p.ResetForPull();
             Boss.BeginFight(tank);
             if (CommandSystem.Instance != null) CommandSystem.Instance.Shout("PULL!", new Color(1f, 0.9f, 0.4f));
         }

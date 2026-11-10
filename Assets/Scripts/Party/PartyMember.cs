@@ -1,10 +1,11 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ReadyCheck
 {
     /// <summary>
-    /// What every party member has in common: movement, role abilities and cooldowns.
+    /// What every party member has in common: movement, basic attacks, signature abilities, crits and cooldowns.
     /// It is "driven" either by <see cref="PartyAI"/> or by <see cref="LeaderController"/> (a human).
     /// Keeping this split is what makes drop-in local co-op possible later: a second player just
     /// replaces a member's AI with a player controller.
@@ -23,7 +24,12 @@ namespace ReadyCheck
         public float MoveSpeed = 4.6f;
         public float InterruptReadyAt;
 
+        public readonly List<Ability> Abilities = new List<Ability>();
+        public Blink Blink { get; private set; }
+
         public bool IsMoving { get; private set; }
+        /// <summary>Locked into an ability animation (e.g. Blade Flurry): no walking or basic attacks.</summary>
+        public bool IsBusy => Time.time < busyUntil;
         public string CastName { get; private set; }
         public float CastProgress { get; private set; }
         public float CastTime { get; private set; }
@@ -34,6 +40,7 @@ namespace ReadyCheck
         public const float MeleeRange = 1.3f;
 
         float swingTimer;
+        float busyUntil;
         Unit healTarget;
         Vector3 lastPosition;
 
@@ -46,6 +53,37 @@ namespace ReadyCheck
         {
             IsMoving = (transform.position - lastPosition).sqrMagnitude > 1e-7f;
             lastPosition = transform.position;
+        }
+
+        public void SetupAbilities()
+        {
+            Abilities.Clear();
+            Abilities.AddRange(ClassKits.Create(Profile.Class));
+            foreach (var a in Abilities)
+            {
+                a.Bind(this);
+                if (a is Blink blink) Blink = blink;
+            }
+        }
+
+        public void ResetForPull()
+        {
+            busyUntil = 0f;
+            foreach (var a in Abilities) a.ResetForPull();
+        }
+
+        public T GetAbility<T>() where T : Ability
+        {
+            foreach (var a in Abilities)
+                if (a is T t) return t;
+            return null;
+        }
+
+        public void SetBusy(float seconds)
+        {
+            busyUntil = Time.time + seconds;
+            CastName = null;
+            CastProgress = 0f;
         }
 
         public bool CanInterruptNow => Profile.CanInterrupt && !Unit.IsDead && Time.time >= InterruptReadyAt;
@@ -78,7 +116,7 @@ namespace ReadyCheck
             return false;
         }
 
-        // ----- Combat ------------------------------------------------------------------------------
+        // ----- Damage ------------------------------------------------------------------------------
 
         public float DamageMultiplier()
         {
@@ -88,16 +126,28 @@ namespace ReadyCheck
             return m;
         }
 
+        /// <summary>Deals damage with buffs and a crit roll (crits do double and show a big yellow number).</summary>
+        public float Deal(Unit target, float baseDamage, string ability)
+        {
+            if (target == null || target.IsDead) return 0f;
+            bool crit = UnityEngine.Random.value < Profile.CritChance;
+            float amount = baseDamage * DamageMultiplier() * (crit ? 2f : 1f);
+            if (crit) FX.Burst(target.Position, new Color(1f, 0.9f, 0.3f), 6, 6f, 0.3f);
+            return target.TakeDamage(amount, Unit, ability, crit);
+        }
+
         public float DistanceToBossEdge(RotgutBoss boss)
         {
             return Vector3.Distance(Unit.Position, boss.Unit.Position) - boss.Unit.Radius;
         }
 
+        // ----- Basic attacks -----------------------------------------------------------------------
+
         /// <summary>The role's default action for this frame. Called by the AI. The leader attacks manually.</summary>
         public void TickCombat(float dt)
         {
             var enc = EncounterManager.Instance;
-            if (enc == null || enc.State != EncounterState.Fighting || Unit.IsDead) return;
+            if (enc == null || enc.State != EncounterState.Fighting || Unit.IsDead || IsBusy) return;
             var boss = enc.Boss;
             if (boss == null || boss.Unit.IsDead) return;
             float dist = DistanceToBossEdge(boss);
@@ -105,14 +155,14 @@ namespace ReadyCheck
             switch (Profile.Role)
             {
                 case Role.Tank:
-                    Swing(dt, boss, dist, 26f, 1.1f, "Shield Bash");
+                    Swing(dt, boss, dist, 26f, 1.1f, "Shield Bash", new Color(0.9f, 0.92f, 1f));
                     break;
                 case Role.Melee:
-                    Swing(dt, boss, dist, 32f, 0.65f, "Stab");
+                    Swing(dt, boss, dist, 32f, 0.65f, "Stab", new Color(1f, 0.55f, 0.5f));
                     break;
                 case Role.Ranged:
                     Cast(dt, "Fireball", 1.2f, dist <= SpellRange,
-                        () => FireAt(boss.Unit, 52f, new Color(1f, 0.55f, 0.2f), "Fireball"));
+                        () => FireAt(boss.Unit, 52f, new Color(1f, 0.55f, 0.2f), "Fireball", 1.3f, 0.7f));
                     break;
                 case Role.Healer:
                     HealerTick(dt, boss, dist);
@@ -120,14 +170,17 @@ namespace ReadyCheck
             }
         }
 
-        void Swing(float dt, RotgutBoss boss, float dist, float damage, float interval, string ability)
+        void Swing(float dt, RotgutBoss boss, float dist, float damage, float interval, string ability, Color fxColor)
         {
             swingTimer -= dt;
             if (dist > MeleeRange) return;
             if (swingTimer <= 0f)
             {
                 swingTimer = interval;
-                boss.Unit.TakeDamage(damage * DamageMultiplier(), Unit, ability);
+                Deal(boss.Unit, damage, ability);
+                var toBoss = boss.Unit.Position - Unit.Position;
+                float yaw = Mathf.Atan2(toBoss.x, toBoss.z) * Mathf.Rad2Deg + UnityEngine.Random.Range(-35f, 35f);
+                FX.Slash(Unit.Position + toBoss.normalized * 0.7f, yaw, fxColor, Profile.Role == Role.Tank ? 1.3f : 1f);
             }
         }
 
@@ -182,8 +235,14 @@ namespace ReadyCheck
         {
             if (healTarget == null || healTarget.IsDead) return;
             var target = healTarget;
-            Projectile.Fire(Unit.Position, target, new Color(0.5f, 1f, 0.5f), 18f,
-                () => target.Heal(230f, Unit));
+            var source = Unit;
+            var green = new Color(0.5f, 1f, 0.5f);
+            Projectile.Fire(Unit.Position, target, green, 18f, () =>
+            {
+                target.Heal(230f, source);
+                FX.Burst(target.Position, green, 8, 3f, 0.45f);
+                FX.Glow(target.Position, green, 1f, 0.35f, target);
+            }, null, 1.1f, 0.6f);
         }
 
         bool InRange(Unit target, float range) => Vector3.Distance(Unit.Position, target.Position) <= range;
@@ -208,19 +267,27 @@ namespace ReadyCheck
             return best;
         }
 
-        public void FireAt(Unit target, float damage, Color color, string ability)
+        public void FireAt(Unit target, float damage, Color color, string ability, float scale = 1f, float impact = 0.35f)
         {
-            float dmg = damage * DamageMultiplier();
-            var source = Unit;
-            Projectile.Fire(Unit.Position, target, color, 18f,
-                () => target.TakeDamage(dmg, source, ability));
+            var self = this;
+            Projectile.Fire(Unit.Position, target, color, 18f, () => self.Deal(target, damage, ability), null, scale, impact);
         }
+
+        // ----- Interrupts --------------------------------------------------------------------------
 
         public bool TryInterrupt(RotgutBoss boss)
         {
             if (!CanInterruptNow || boss == null || !boss.IsCasting || !boss.CastInterruptible) return false;
             if (DistanceToBossEdge(boss) > Profile.InterruptRange) return false;
             InterruptReadyAt = Time.time + Profile.InterruptCooldown;
+
+            var color = Profile.Class == ClassKind.Mage ? new Color(0.75f, 0.45f, 1f) : new Color(1f, 0.92f, 0.3f);
+            FX.Callout(Unit, Profile.InterruptName.ToUpperInvariant() + "!", color);
+            if (Profile.Class == ClassKind.Mage) FX.Beam(Unit.Position, boss.Unit.Position, color, 0.25f, 0.3f);
+            Telegraph.Flash(boss.Unit.Position, 2.4f, color, 0.35f);
+            FX.Burst(boss.Unit.Position, color, 20, 8f);
+            CameraRig.Shake(0.15f, 0.15f);
+            FX.HitStop(0.06f);
             boss.Interrupt(this);
             return true;
         }

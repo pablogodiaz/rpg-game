@@ -138,6 +138,32 @@ progression raiding work in a single-player game: failure isn't wasted time.
 | **Ranged DPS** | Safe damage, handles ranged mechanics | Cast times (have to stop casting to move) | Mage, Hunter |
 | **Support** | Buffs, debuffs, interrupts, crowd control | Limited-charge utilities | Chronomancer, Warchanter |
 
+#### Signature abilities (v0.4)
+Members aren't just stat sticks. Each has a small kit of **loud, readable abilities** that the AI uses on its own
+when the moment is right. The player always sees *who did what*: a callout over the caster's head, a distinct
+effect shape and color per ability, damage numbers with big crits, and buff auras on the units.
+
+| Member | Signature abilities (used on their own, with visible effects) | Interrupt |
+|---|---|---|
+| **Grenn** (Guardian, tank) | **Taunt**: yellow tether, yanks Rotgut back when he turns on someone · **Shield Slam**: shockwave, big threat, staggers the boss · **Bulwark**: golden shield bubble, -55% damage (fires on DEFENSIVES) | - |
+| **Pip** (Cleric, healer) | **Divine Shield**: cyan bubble that absorbs 450 damage on whoever is about to die (DEFENSIVES) · **Holy Nova**: expanding ring that heals everyone nearby | - |
+| **Vex** (Duelist, melee) | **Blade Flurry**: shadowsteps through the boss leaving afterimages, then 6 slashes and a finisher (BURN). Highest crit chance | Kick |
+| **Moira** (Mage, ranged) | **Meteor**: a meteor drops out of the sky for a big explosion (BURN) · **Arcane Barrage**: 6 missiles that curve into the boss · **Blink**: teleports out of fire and into stacks instead of walking | Counterspell |
+| **You** (Raid Leader) | **Piercing Lance**: golden beam · **Rally**: +30% party damage shockwave · **Battle Rez**: brings back the last fallen ally (once per pull) | - |
+
+Every hit shows a damage number (crits are big and yellow), every ability shouts its name over the caster's head,
+and buffs are visible on the units: a fiery glow for BURN, a gold glow for Rally and shield bubbles for absorbs.
+Your **BURN** call makes Vex and Moira fire their big abilities immediately, and **DEFENSIVES** makes Grenn and
+Pip pop their shields. Your calls now come with fireworks.
+
+Design rules for abilities:
+- **One look per ability.** Shape and color identify it at a glance (Grenn = gold/white, Pip = cyan/holy yellow,
+  Vex = red, Moira = orange/purple, you = gold).
+- **Calls trigger kits.** BURN fires burst abilities and DEFENSIVES fires defensive ones, so commanding has visible payoff.
+- **Big hits feel heavy:** a short hit-stop and screen shake on Meteor, Shield Slam, Blade Flurry's finisher and Belly Flop.
+- **AI uses abilities with simple, legible rules** (taunt when the boss turns away, shield whoever is below 35%,
+  nova when 3+ are hurt), so players can learn what their raid will do.
+
 Shared role duties are spread across subclasses on purpose. Not every class can interrupt, dispel or battle rez,
 so **raid composition is a real choice**.
 
@@ -374,6 +400,11 @@ A first playable version of the core loop, built entirely from code (no imported
 
 Known shortcuts to revisit: IMGUI HUD (placeholder), built-in render pipeline instead of URP, plain-data
 roster instead of ScriptableObjects, PlayerPrefs saves.
+
+### Iteration 2: signature abilities (done)
+Added class kits (see section 3.5), an effects system (pooled particles, floating numbers and callouts, beams,
+slashes, afterimages, meteors, hit-stop), crits, absorb shields, Battle Rez, buff auras, and the BURN/DEFENSIVES
+calls firing abilities. Raid frames show each member's ability cooldowns.
 
 ### Next up (suggested)
 1. Playtest and tune Rotgut (damage numbers, timings, Awareness/Familiarity curve).

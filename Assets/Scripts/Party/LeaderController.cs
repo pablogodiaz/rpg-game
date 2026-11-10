@@ -3,7 +3,8 @@ using UnityEngine;
 namespace ReadyCheck
 {
     /// <summary>
-    /// The human-controlled raid leader: movement, Leader Bolt, Dodge, Rally, Quick Calls and the Raid Wheel.
+    /// The human-controlled raid leader: movement, Leader Bolt, Dodge, Piercing Lance, Rally, Battle Rez,
+    /// Quick Calls and the Raid Wheel.
     /// Holding the wheel slows time to 20% so calls can be made under pressure without a full pause.
     /// </summary>
     public class LeaderController : MonoBehaviour
@@ -19,16 +20,15 @@ namespace ReadyCheck
         public const float AttackDamage = 24f;
         public const float DodgeCooldown = 5f;
         public const float DodgeDuration = 0.22f;
-        public const float RallyCooldown = 90f;
 
         public float DodgeReadyAt { get; private set; }
-        public float RallyReadyAt { get; private set; }
         public bool WheelOpen { get; private set; }
         public int WheelSelection { get; private set; } = -1;
 
         PartyMember m;
         float attackReadyAt;
         float dodgeEndsAt;
+        float nextAfterimage;
         Vector3 dodgeDir = Vector3.forward;
         Vector3 lastMoveDir = Vector3.forward;
         Vector2 wheelPointerOrigin;
@@ -65,6 +65,11 @@ namespace ReadyCheck
             if (Time.time < dodgeEndsAt)
             {
                 m.Move(dodgeDir, 3.4f);
+                if (Time.time >= nextAfterimage && m.Unit.Visual != null)
+                {
+                    nextAfterimage = Time.time + 0.035f;
+                    FX.Afterimage(m.Unit.Visual.Body, new Color(1f, 0.9f, 0.5f, 0.6f), 0.3f);
+                }
             }
             else
             {
@@ -85,10 +90,13 @@ namespace ReadyCheck
                 dodgeEndsAt = Time.time + DodgeDuration;
                 DodgeReadyAt = Time.time + DodgeCooldown;
                 m.Unit.Invulnerable = true;
+                FX.Burst(m.Unit.Position, new Color(0.9f, 0.85f, 0.7f), 8, 4f, 0.3f);
             }
 
             if (input.Attack.IsPressed() && Time.time >= attackReadyAt) TryAttack(enc);
-            if (input.Rally.WasPressedThisFrame()) TryRally(enc);
+            if (input.Rally.WasPressedThisFrame()) UseAbility<RallyAbility>();
+            if (input.Lance.WasPressedThisFrame()) UseAbility<PiercingLance>();
+            if (input.BattleRez.WasPressedThisFrame()) UseAbility<BattleRez>();
 
             // Quick Calls (D-pad / number keys)
             var cmd = CommandSystem.Instance;
@@ -135,20 +143,21 @@ namespace ReadyCheck
             m.FireAt(boss.Unit, AttackDamage, new Color(1f, 0.9f, 0.35f), "Leader Bolt");
         }
 
-        void TryRally(EncounterManager enc)
+        void UseAbility<T>() where T : Ability
         {
-            if (Time.time < RallyReadyAt)
+            var ability = m.GetAbility<T>();
+            if (ability == null) return;
+            if (ability.Charges == 0)
             {
-                Barks.Say(m.Unit, $"Rally is on cooldown ({RallyReadyAt - Time.time:0}s).", 1.5f, true);
+                Barks.Say(m.Unit, $"No {ability.Name} left this pull.", 1.4f, true);
                 return;
             }
-            RallyReadyAt = Time.time + RallyCooldown;
-            foreach (var member in enc.Party)
-                if (!member.Unit.IsDead)
-                    member.Unit.AddBuff("rally", "RALLY", BuffKind.DamageDone, 1.3f, 12f);
-            CombatLog.RecordCall("Rally");
-            CommandSystem.Instance.Shout("RALLY! (+30% damage)", new Color(1f, 0.85f, 0.3f));
-            Barks.Say(m.Unit, BarkLines.Pick(BarkLines.Rally), 2f, true);
+            if (!ability.Ready)
+            {
+                Barks.Say(m.Unit, $"{ability.Name} is on cooldown ({ability.Remaining:0}s).", 1.4f, true);
+                return;
+            }
+            ability.TryUse(true);
         }
 
         void OpenWheel(GameInput input)

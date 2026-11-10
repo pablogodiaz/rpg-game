@@ -42,8 +42,8 @@ namespace ReadyCheck
                 case RaidCall.Stack: return "Group up on you";
                 case RaidCall.Spread: return "Fan out around the boss";
                 case RaidCall.Interrupt: return "Nearest kicker interrupts";
-                case RaidCall.Burn: return "x2 damage, 10s";
-                case RaidCall.Defensives: return "-40% damage taken, 6s";
+                case RaidCall.Burn: return "x2 damage + big abilities";
+                case RaidCall.Defensives: return "-40% damage + shields";
                 case RaidCall.AsYouWere: return "Cancel orders";
                 default: return "";
             }
@@ -139,8 +139,14 @@ namespace ReadyCheck
                 case RaidCall.Stack: CallStack(enc); break;
                 case RaidCall.Spread: CallSpread(enc); break;
                 case RaidCall.Interrupt: CallInterrupt(enc); break;
-                case RaidCall.Burn: CallBuff(enc, "burn", "BURN", BuffKind.DamageDone, 2f, 10f, BarkLines.AckBurn); break;
-                case RaidCall.Defensives: CallBuff(enc, "def", "DEF", BuffKind.DamageTaken, 0.6f, 6f, BarkLines.AckDefensives); break;
+                case RaidCall.Burn:
+                    CallBuff(enc, "burn", "BURN", BuffKind.DamageDone, 2f, 10f, BarkLines.AckBurn);
+                    FireAbilities(enc, a => a.IsBurst);
+                    break;
+                case RaidCall.Defensives:
+                    CallBuff(enc, "def", "DEF", BuffKind.DamageTaken, 0.6f, 6f, BarkLines.AckDefensives);
+                    FireAbilities(enc, a => a.IsDefensive);
+                    break;
                 case RaidCall.AsYouWere:
                     foreach (var member in enc.Party)
                         if (member.AI != null) member.AI.ClearOrder();
@@ -221,10 +227,29 @@ namespace ReadyCheck
             }
         }
 
+        /// <summary>Makes every AI member fire their matching abilities right now (if off cooldown).</summary>
+        static void FireAbilities(EncounterManager enc, System.Func<Ability, bool> filter)
+        {
+            foreach (var member in enc.Party)
+            {
+                if (member.AI == null || member.Unit.IsDead) continue;
+                foreach (var ability in member.Abilities)
+                {
+                    if (!filter(ability)) continue;
+                    if (!ability.TryUse(true) && !ability.Ready)
+                        Barks.Say(member.Unit, $"{ability.Name} on cooldown ({ability.Remaining:0}s)!", 1.6f);
+                }
+            }
+        }
+
         static void CallBuff(EncounterManager enc, string id, string label, BuffKind kind, float value, float duration, string[] ack)
         {
             foreach (var member in enc.Party)
-                if (!member.Unit.IsDead) member.Unit.AddBuff(id, label, kind, value, duration);
+            {
+                if (member.Unit.IsDead) continue;
+                member.Unit.AddBuff(id, label, kind, value, duration);
+                FX.Burst(member.Unit.Position, kind == BuffKind.DamageDone ? new Color(1f, 0.4f, 0.2f) : new Color(0.45f, 0.75f, 1f), 10, 4f);
+            }
             AckFromSomeone(enc, ack);
         }
 

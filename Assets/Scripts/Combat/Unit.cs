@@ -39,12 +39,18 @@ namespace ReadyCheck
 
         public readonly List<Buff> Buffs = new List<Buff>();
 
+        /// <summary>Damage absorption (e.g. Divine Shield). Used up before health.</summary>
+        public float Absorb { get; private set; }
+        public float AbsorbMax { get; private set; }
+        float absorbUntil;
+
         public bool IsDead { get; private set; }
         public string DeathCause { get; private set; }
 
         /// <summary>Raised after damage is applied: (source, amount).</summary>
         public event Action<Unit, float> Damaged;
         public event Action<Unit> Died;
+        public event Action<Unit> Revived;
 
         public Vector3 Position
         {
@@ -83,11 +89,36 @@ namespace ReadyCheck
             return m;
         }
 
-        public float TakeDamage(float amount, Unit source, string ability)
+        public void AddAbsorb(float amount, float duration)
         {
-            if (IsDead || amount <= 0f || Invulnerable) return 0f;
+            Absorb = amount;
+            AbsorbMax = amount;
+            absorbUntil = Time.time + duration;
+        }
+
+        public float TakeDamage(float amount, Unit source, string ability, bool crit = false)
+        {
+            if (IsDead || amount <= 0f) return 0f;
+            if (Invulnerable)
+            {
+                FX.Text(Position + Vector3.forward * 0.7f, "DODGED", new Color(0.8f, 0.9f, 1f), 11, 0.6f);
+                return 0f;
+            }
             amount *= Multiplier(BuffKind.DamageTaken);
+            if (Absorb > 0f)
+            {
+                float soaked = Mathf.Min(Absorb, amount);
+                Absorb -= soaked;
+                amount -= soaked;
+                if (Absorb <= 0f) FX.Burst(Position, new Color(0.55f, 0.9f, 1f), 14, 5f);
+                if (amount <= 0f)
+                {
+                    FX.Text(Position + Vector3.forward * 0.7f, "ABSORBED", new Color(0.55f, 0.9f, 1f), 11, 0.6f);
+                    return 0f;
+                }
+            }
             Health -= amount;
+            if (Team == Team.Enemy || amount >= 50f) FX.Number(this, amount, crit, false);
             CombatLog.RecordDamage(source, this, amount, ability);
             if (Visual != null) Visual.Flash(new Color(1f, 0.45f, 0.45f));
             Damaged?.Invoke(source, amount);
@@ -105,13 +136,25 @@ namespace ReadyCheck
             float effective = Mathf.Min(amount, MaxHealth - Health);
             Health += effective;
             CombatLog.RecordHeal(source, this, effective);
+            if (effective >= 1f) FX.Number(this, effective, false, true);
             if (Visual != null && effective > 0f) Visual.Flash(new Color(0.6f, 1f, 0.6f));
             return effective;
+        }
+
+        /// <summary>Brings a dead unit back (Battle Rez).</summary>
+        public void Revive(float healthFraction)
+        {
+            if (!IsDead) return;
+            IsDead = false;
+            DeathCause = null;
+            Health = Mathf.Max(1f, MaxHealth * healthFraction);
+            Revived?.Invoke(this);
         }
 
         void Die(string cause)
         {
             IsDead = true;
+            Absorb = 0f;
             DeathCause = string.IsNullOrEmpty(cause) ? "Unknown" : cause;
             Buffs.Clear();
             CombatLog.RecordDeath(this, DeathCause);
@@ -121,6 +164,7 @@ namespace ReadyCheck
         void Update()
         {
             if (Buffs.Count > 0) Buffs.RemoveAll(b => Time.time >= b.ExpiresAt);
+            if (Absorb > 0f && Time.time >= absorbUntil) Absorb = 0f;
         }
     }
 }

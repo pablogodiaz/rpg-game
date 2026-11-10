@@ -15,8 +15,13 @@ namespace ReadyCheck
         float speed;
         Color color;
         Action onHit;
+        Vector3 velocity;
+        float born;
+        float impactSize;
 
-        public static void Fire(Vector3 from, Unit target, Color color, float speed, Action onHit)
+        /// <param name="initialVelocity">Optional launch velocity. The bullet then curves toward the target (missile barrages).</param>
+        public static void Fire(Vector3 from, Unit target, Color color, float speed, Action onHit,
+            Vector3? initialVelocity = null, float scale = 1f, float impactSize = 0.35f)
         {
             if (target == null) return;
             var go = new GameObject("Projectile");
@@ -27,6 +32,7 @@ namespace ReadyCheck
             toTarget.y = 0f;
             if (toTarget.sqrMagnitude > 0.25f) from += toTarget.normalized * 0.45f; // muzzle in front of the shooter
             go.transform.position = from;
+            go.transform.localScale = Vector3.one * scale;
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = PixelArt.Bullet(color);
@@ -54,7 +60,12 @@ namespace ReadyCheck
             p.speed = speed;
             p.color = color;
             p.onHit = onHit;
-            p.Face(target.Position - from);
+            p.born = Time.time;
+            p.impactSize = impactSize;
+            var straight = target.Position - from;
+            straight.y = 0f;
+            p.velocity = initialVelocity ?? straight.normalized * speed;
+            p.Face(p.velocity);
         }
 
         void Face(Vector3 dir)
@@ -74,9 +85,14 @@ namespace ReadyCheck
 
             var aim = target.Position;
             aim.y = 0.2f;
-            var before = transform.position;
-            transform.position = Vector3.MoveTowards(before, aim, speed * Time.deltaTime);
-            Face(transform.position - before);
+            // Steer toward the target; steering gets stronger with age so curving missiles always connect.
+            float age = Time.time - born;
+            var desired = (aim - transform.position).normalized * speed;
+            velocity = Vector3.MoveTowards(velocity, desired, speed * (5f + age * 30f) * Time.deltaTime);
+            var step = velocity * Time.deltaTime;
+            var toAim = aim - transform.position;
+            transform.position = step.sqrMagnitude >= toAim.sqrMagnitude ? aim : transform.position + step;
+            Face(velocity);
 
             // Hit the edge of the target, not its center.
             var flat = transform.position - aim;
@@ -84,7 +100,8 @@ namespace ReadyCheck
             if (flat.magnitude <= target.Radius * 0.6f + 0.05f)
             {
                 onHit?.Invoke();
-                Telegraph.Flash(transform.position, 0.35f, color, 0.15f);
+                Telegraph.Flash(transform.position, impactSize, color, 0.15f);
+                FX.Burst(transform.position, color, 4, 4f, 0.25f);
                 Destroy(gameObject);
             }
         }

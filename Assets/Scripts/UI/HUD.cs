@@ -16,7 +16,7 @@ namespace ReadyCheck
         float vw = 1280f;
         float vh = RefHeight;
 
-        GUIStyle label, labelRight, labelCenter, small, smallCenter, smallRight, big, title, bubble, wheelItem;
+        GUIStyle label, labelRight, labelCenter, small, smallCenter, smallRight, big, title, bubble, wheelItem, floating, chip;
         bool stylesReady;
 
         static readonly Color Panel = new Color(0.06f, 0.05f, 0.09f, 0.82f);
@@ -40,6 +40,8 @@ namespace ReadyCheck
             bubble = new GUIStyle(labelCenter) { fontSize = 12, wordWrap = true };
             bubble.normal.textColor = new Color(0.1f, 0.08f, 0.12f);
             wheelItem = new GUIStyle(labelCenter) { fontSize = 15, fontStyle = FontStyle.Bold };
+            floating = new GUIStyle(labelCenter) { fontStyle = FontStyle.Bold };
+            chip = new GUIStyle(smallCenter) { fontSize = 9, fontStyle = FontStyle.Bold };
             stylesReady = true;
         }
 
@@ -121,6 +123,7 @@ namespace ReadyCheck
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1f));
 
             DrawWorldMarkers(enc);
+            DrawFloatingText();
             DrawBarks();
             if (enc.Boss != null) DrawBossFrame(enc);
             DrawRaidFrames(enc);
@@ -172,6 +175,24 @@ namespace ReadyCheck
                     Box(r, new Color(0.7f, 0.35f, 1f, 0.75f));
                     Text(r, "YOU", smallCenter);
                 }
+            }
+        }
+
+        /// <summary>Damage numbers and ability callouts rising off units.</summary>
+        void DrawFloatingText()
+        {
+            float now = Time.unscaledTime;
+            foreach (var ft in FX.Texts)
+            {
+                float age = now - ft.Born;
+                float t = Mathf.Clamp01(age / ft.Life);
+                var world = ft.World + Vector3.forward * (age * 0.9f) + Vector3.right * (ft.DriftX * age);
+                if (!WorldToGui(world, out var g)) continue;
+                float alpha = t < 0.7f ? 1f : (1f - t) / 0.3f;
+                float pop = ft.Pop && age < 0.12f ? Mathf.Lerp(1.6f, 1f, age / 0.12f) : 1f;
+                floating.fontSize = Mathf.RoundToInt(ft.Size * pop);
+                var r = new Rect(g.x - 120f, g.y - 16f, 240f, 32f);
+                Text(r, ft.Text, floating, new Color(ft.Color.r, ft.Color.g, ft.Color.b, alpha));
             }
         }
 
@@ -229,7 +250,7 @@ namespace ReadyCheck
 
         void DrawRaidFrames(EncounterManager enc)
         {
-            float x = 12f, y = 96f, w = 230f, h = 48f;
+            float x = 12f, y = 96f, w = 230f, h = 60f;
             Box(new Rect(x - 6, y - 24, w + 12, enc.Party.Count * (h + 6) + 28), Panel);
             Text(new Rect(x, y - 22, w, 20), "RAID", small, Muted);
 
@@ -254,6 +275,9 @@ namespace ReadyCheck
                 var hpRect = new Rect(x + 8, y + 19, w - 16, 13);
                 var hpColor = Color.Lerp(new Color(0.85f, 0.2f, 0.2f), new Color(0.3f, 0.85f, 0.35f), u.HealthPercent);
                 Bar(hpRect, u.HealthPercent, hpColor, BarBg);
+                if (u.Absorb > 0f)
+                    Box(new Rect(hpRect.x, hpRect.yMax - 4, hpRect.width * Mathf.Clamp01(u.Absorb / u.MaxHealth), 4),
+                        new Color(0.55f, 0.9f, 1f, 0.95f));
                 Text(hpRect, u.IsDead ? $"DEAD ({u.DeathCause})" : $"{u.Health:0} / {u.MaxHealth:0}", smallCenter);
 
                 if (p.CastName != null && !u.IsDead)
@@ -266,8 +290,27 @@ namespace ReadyCheck
                 Text(new Rect(x + 8, y + 33, w - 12, 14),
                     p.IsLeader ? "" : $"awareness {p.Profile.Awareness * 100f:0}  fam {p.Familiarity}", smallRight, Muted);
 
+                DrawAbilityChips(p, x + 8, y + 47);
+
                 if (u.IsDead) Box(r, new Color(0f, 0f, 0f, 0.45f));
                 y += h + 6f;
+            }
+        }
+
+        /// <summary>Small cooldown chips for each signature ability. They flash white when used.</summary>
+        void DrawAbilityChips(PartyMember p, float x, float y)
+        {
+            const float cw = 42f, chh = 11f;
+            foreach (var a in p.Abilities)
+            {
+                var r = new Rect(x, y, cw, chh);
+                var c = a.Color;
+                Box(r, new Color(c.r * 0.25f, c.g * 0.25f, c.b * 0.25f, 1f));
+                float frac = a.Charges == 0 ? 0f : a.Ready ? 1f : 1f - a.Remaining / a.Cooldown;
+                Box(new Rect(x, y, cw * frac, chh), a.Ready ? c : new Color(c.r * 0.55f, c.g * 0.55f, c.b * 0.55f, 1f));
+                if (Time.time - a.LastUsedAt < 0.35f) Box(r, new Color(1f, 1f, 1f, 0.8f));
+                Text(r, a.Short, chip, a.Ready ? Color.black : Color.white);
+                x += cw + 3f;
             }
         }
 
@@ -302,15 +345,38 @@ namespace ReadyCheck
                 x += bw + gap;
             }
 
-            // Leader abilities line
-            float rallyCd = Mathf.Max(0f, leader.RallyReadyAt - Time.time);
-            float dodgeCd = Mathf.Max(0f, leader.DodgeReadyAt - Time.time);
-            string abilities =
-                $"Attack [{input.Glyph("RT", "LMB / J")}]     " +
-                $"Dodge [{input.Glyph("A", "Space")}] {(dodgeCd > 0 ? dodgeCd.ToString("0") + "s" : "ready")}     " +
-                $"Rally [{input.Glyph("Y", "R")}] {(rallyCd > 0 ? rallyCd.ToString("0") + "s" : "ready")}     " +
-                $"Raid Wheel [hold {input.Glyph("LB", "Q / RMB")}]";
-            Text(new Rect(0, vh - 26, vw, 20), abilities, smallCenter, Muted);
+            // Leader abilities row
+            var lc = enc.Leader;
+            float ax = (vw - total) / 2f, ay = y + bh + 4f, ah = 24f;
+            DrawLeaderSlot(new Rect(ax, ay, bw, ah), $"Attack {input.Glyph("RT", "LMB")}", new Color(1f, 0.9f, 0.35f), 0f, 1f, -1);
+            ax += bw + gap;
+            DrawLeaderSlot(new Rect(ax, ay, bw, ah), $"Dodge {input.Glyph("A", "Spc")}", new Color(0.85f, 0.85f, 0.95f),
+                Mathf.Max(0f, leader.DodgeReadyAt - Time.time), LeaderController.DodgeCooldown, -1);
+            ax += bw + gap;
+            foreach (var a in lc.Abilities)
+            {
+                string key = a is PiercingLance ? input.Glyph("X", "E") : a is RallyAbility ? input.Glyph("Y", "R") : input.Glyph("B", "F");
+                string name = a is PiercingLance ? "Lance" : a.Name;
+                DrawLeaderSlot(new Rect(ax, ay, bw, ah), $"{name} {key}", a.Color, a.Remaining, a.Cooldown, a.Charges, a.LastUsedAt);
+                ax += bw + gap;
+            }
+            DrawLeaderSlot(new Rect(ax, ay, bw, ah), $"Wheel {input.Glyph("LB", "Q")}", new Color(0.8f, 0.7f, 1f), 0f, 1f, -1);
+        }
+
+        void DrawLeaderSlot(Rect r, string text, Color color, float remaining, float cooldown, int charges, float lastUsed = -100f)
+        {
+            Box(r, PanelLight);
+            Box(new Rect(r.x, r.y, r.width, 2), color);
+            bool empty = charges == 0;
+            if (remaining > 0f && cooldown > 0f)
+            {
+                float frac = remaining / cooldown;
+                Box(new Rect(r.x, r.y + r.height * (1f - frac), r.width, r.height * frac), new Color(0f, 0f, 0f, 0.6f));
+            }
+            if (empty) Box(r, new Color(0f, 0f, 0f, 0.6f));
+            if (Time.time - lastUsed < 0.3f) Box(r, new Color(1f, 1f, 1f, 0.6f));
+            string label = remaining > 0f ? $"{text}  {remaining:0}s" : empty ? $"{text}  (used)" : text;
+            Text(r, label, smallCenter, remaining > 0f || empty ? Muted : Color.white);
         }
 
         // ----- Mechanic hints ----------------------------------------------------------------------
@@ -395,7 +461,7 @@ namespace ReadyCheck
 
         void DrawPrePull(EncounterManager enc, GameInput input)
         {
-            float w = 600f, h = 360f, x = (vw - w) / 2f, y = (vh - h) / 2f + 20f;
+            float w = 660f, h = 450f, x = (vw - w) / 2f, y = (vh - h) / 2f + 20f;
             Box(new Rect(x, y, w, h), Panel);
             Box(new Rect(x, y, w, 3), Gold);
             Text(new Rect(x, y + 10, w, 30), "READY CHECK", title, Gold);
@@ -420,6 +486,11 @@ namespace ReadyCheck
                     ? $"{p.Profile.Name} - {p.Profile.ClassTitle}"
                     : $"{p.Profile.Name} - {p.Profile.ClassTitle} ({MemberProfile.RoleName(p.Profile.Role)})   traits: {traits}   familiarity: {p.Familiarity}";
                 Text(new Rect(x + 20, ly, w - 40, 18), line, small, p.IsLeader ? Gold : Color.white);
+                ly += 15f;
+                var names = new List<string>();
+                foreach (var a in p.Abilities) names.Add(a.Name);
+                if (p.Profile.CanInterrupt) names.Add(p.Profile.InterruptName + " (interrupt)");
+                Text(new Rect(x + 34, ly, w - 54, 18), "abilities: " + string.Join(", ", names), small, Muted);
                 ly += 17f;
             }
 
@@ -429,13 +500,13 @@ namespace ReadyCheck
             string[] controls = input.UsingGamepad
                 ? new[]
                 {
-                    "Left stick: move     RT: attack     A: dodge     Y: Rally (+30% party damage)",
+                    "Left stick: move   RT: attack   A: dodge   X: Piercing Lance   Y: Rally   B: Battle Rez",
                     "D-pad: Quick Calls (Up Stack, Down Spread, Left Interrupt, Right Burn)",
                     "Hold LB: Raid Wheel (slow-mo), aim with right stick, release to call",
                 }
                 : new[]
                 {
-                    "WASD: move     LMB / J: attack     Space: dodge     R: Rally (+30% party damage)",
+                    "WASD: move   LMB / J: attack   Space: dodge   E: Piercing Lance   R: Rally   F: Battle Rez",
                     "1-6: calls (Stack, Spread, Interrupt, Burn, Defensives, As You Were)",
                     "Hold Q or RMB: Raid Wheel (slow-mo), move the mouse toward a call, release to call",
                 };
@@ -462,7 +533,7 @@ namespace ReadyCheck
         void DrawReport(EncounterManager enc, GameInput input)
         {
             bool victory = enc.State == EncounterState.Victory;
-            float w = 660f, h = 430f, x = (vw - w) / 2f, y = (vh - h) / 2f + 30f;
+            float w = 660f, h = 450f, x = (vw - w) / 2f, y = (vh - h) / 2f + 30f;
             Box(new Rect(x, y, w, h), Panel);
             var accent = victory ? Gold : new Color(1f, 0.35f, 0.3f);
             Box(new Rect(x, y, w, 3), accent);
@@ -483,14 +554,15 @@ namespace ReadyCheck
             Text(new Rect(c3, ty, 240, 18), "DIED TO", small, Muted);
             ty += 18f;
 
-            Unit topDamage = null, mostFire = null;
+            Unit topDamage = null, mostFire = null, flashiest = null;
             float topDmg = -1f;
-            int fire = 0;
+            int fire = 0, flashes = 0;
             foreach (var p in enc.Party)
             {
                 var s = CombatLog.Get(p.Unit);
                 if (s.Damage > topDmg) { topDmg = s.Damage; topDamage = p.Unit; }
                 if (s.FireTicks > fire) { fire = s.FireTicks; mostFire = p.Unit; }
+                if (!p.IsLeader && s.AbilitiesUsed > flashes) { flashes = s.AbilitiesUsed; flashiest = p.Unit; }
                 Text(new Rect(c0, ty, 200, 18), $"{p.Profile.Name} ({p.Profile.ClassTitle})", small, p.IsLeader ? Gold : Color.white);
                 Text(new Rect(c1, ty, 90, 18), $"{s.Damage:0}", small);
                 Text(new Rect(c2, ty, 90, 18), $"{s.Healing:0}", small);
@@ -502,6 +574,7 @@ namespace ReadyCheck
             Text(new Rect(c0, ty, w - 48, 18), "AWARDS", small, Muted);
             ty += 17f;
             if (topDamage != null) { Text(new Rect(c0, ty, w - 48, 18), $"Top Damage: {topDamage.DisplayName} ({topDmg:0})", small); ty += 16f; }
+            if (flashiest != null) { Text(new Rect(c0, ty, w - 48, 18), $"Flashiest: {flashiest.DisplayName} ({flashes} abilities)", small); ty += 16f; }
             if (mostFire != null) { Text(new Rect(c0, ty, w - 48, 18), $"Most Fire Stood In: {mostFire.DisplayName} ({fire} ticks)", small); ty += 16f; }
             if (CombatLog.DeathOrder.Count > 0) { Text(new Rect(c0, ty, w - 48, 18), $"First To Die: {CombatLog.DeathOrder[0].DisplayName}", small); ty += 16f; }
 

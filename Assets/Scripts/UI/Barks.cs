@@ -60,6 +60,11 @@ namespace ReadyCheck
         public static readonly string[] AckDefensives = { "Shields up!", "Bracing!", "Defensives popped!" };
         public static readonly string[] Rally = { "For the loot!", "Rally to me!", "Hit him harder!", "For the guild!" };
 
+        public static readonly string[] Taunt = { "HEY, UGLY! OVER HERE!", "Eyes on me, big guy!", "Your mother was a salad!", "I'M the main course!" };
+        public static readonly string[] Shielded = { "Ooh, shiny!", "Thanks, Pip!", "Bubble boy reporting in!" };
+        public static readonly string[] Meteor = { "Big numbers incoming!", "Look up, Rotgut!", "Fore!", "Special delivery!" };
+        public static readonly string[] Rezzed = { "I saw a light! ...it was Pip's staff.", "I'm up! What did I miss?", "Never doubted you, boss.", "Was I dead? I was resting." };
+
         public static readonly string[] SelfRespond = { "I've got this one!", "Moving!", "Oh, I know this!" };
         public static readonly string[] SelfRespondFamiliar = { "I've seen this one!", "Not again, Rotgut.", "Like we practiced!", "Fool me once..." };
 

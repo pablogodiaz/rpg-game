@@ -50,6 +50,7 @@ namespace ReadyCheck
         public Vector3 FacingDirection { get; private set; } = Vector3.back;
         public Unit CurrentTarget { get; private set; }
         public float IndigestionResolveAt => indigestionResolveAt;
+        public bool IsLeaping => leaping;
 
         Action onCastComplete;
         readonly Dictionary<Unit, float> threat = new Dictionary<Unit, float>();
@@ -87,6 +88,29 @@ namespace ReadyCheck
             threat.Clear();
             if (tank != null) threat[tank.Unit] = 400f; // opening taunt
             Barks.Say(Unit, BarkLines.Pick(BarkLines.BossPull), 3f, true);
+        }
+
+        public void AddThreat(Unit source, float amount)
+        {
+            if (source == null) return;
+            threat.TryGetValue(source, out var t);
+            threat[source] = t + amount;
+        }
+
+        /// <summary>Taunt: jump to the top of the threat table and become the target immediately.</summary>
+        public void ForceTarget(Unit source)
+        {
+            float max = 0f;
+            foreach (var kv in threat) max = Mathf.Max(max, kv.Value);
+            threat[source] = max + 800f;
+            CurrentTarget = source;
+        }
+
+        /// <summary>Delays his next swing (Shield Slam).</summary>
+        public void Stagger(float seconds)
+        {
+            nextAuto = Mathf.Max(nextAuto, Time.time + seconds);
+            if (Visual != null) Visual.Flash(Color.white, 0.12f);
         }
 
         void OnDamaged(Unit source, float amount)
@@ -223,6 +247,9 @@ namespace ReadyCheck
             {
                 nextAuto = now + AutoAttackInterval;
                 target.TakeDamage(AutoAttackDamage * DamageScale, Unit, "Rotgut's Fist");
+                var hit = Unit.Position + FacingDirection * (Unit.Radius + 0.3f);
+                FX.Slash(hit, Mathf.Atan2(FacingDirection.x, FacingDirection.z) * Mathf.Rad2Deg, new Color(0.75f, 0.9f, 0.5f), 2.2f);
+                FX.Spray(hit, FacingDirection, new Color(0.8f, 0.8f, 0.7f), 8, 6f);
             }
         }
 
@@ -330,7 +357,9 @@ namespace ReadyCheck
             }
 
             Telegraph.Flash(point, FlopRadius + 0.5f, new Color(1f, 0.7f, 0.3f), 0.45f);
+            FX.Burst(point, new Color(0.55f, 0.5f, 0.45f), 40, 10f, 0.7f, 1.8f); // dust
             CameraRig.Shake(0.35f, 0.35f);
+            FX.HitStop(0.08f);
             if (flopTelegraph != null) Destroy(flopTelegraph.gameObject);
             nextAuto = Time.time + 1f;
         }
@@ -369,6 +398,7 @@ namespace ReadyCheck
             {
                 if (u == null || u.IsDead) continue;
                 Telegraph.Flash(u.Position, IndigestionRadius, new Color(0.7f, 0.35f, 1f), 0.35f);
+                FX.Burst(u.Position, new Color(0.55f, 0.85f, 0.3f), 16, 7f, 0.6f, 1.6f); // gas
                 foreach (var member in party)
                 {
                     var v = member.Unit;
@@ -406,6 +436,8 @@ namespace ReadyCheck
         {
             Unit.Heal(Unit.MaxHealth * 0.04f, Unit);
             WellFedStacks++;
+            FX.Burst(Unit.Position + FacingDirection * 1.8f, new Color(0.75f, 0.5f, 0.3f), 24, 5f, 0.6f); // crumbs
+            FX.Glow(Unit.Position, new Color(1f, 0.5f, 0.2f), 3f, 0.6f, Unit);
             Barks.Say(Unit, BarkLines.Pick(BarkLines.BossAte), 2.5f, true);
             CommandSystem.Instance.Shout($"Rotgut is Well Fed x{WellFedStacks} (+{WellFedStacks * 15}% damage)",
                 new Color(1f, 0.6f, 0.25f));
