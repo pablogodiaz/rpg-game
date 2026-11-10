@@ -105,14 +105,14 @@ namespace ReadyCheck
             switch (Profile.Role)
             {
                 case Role.Tank:
-                    Swing(dt, boss, dist, 18f, 1.2f, "Shield Bash");
+                    Swing(dt, boss, dist, 26f, 1.1f, "Shield Bash");
                     break;
                 case Role.Melee:
-                    Swing(dt, boss, dist, 21f, 0.7f, "Stab");
+                    Swing(dt, boss, dist, 32f, 0.65f, "Stab");
                     break;
                 case Role.Ranged:
-                    Cast(dt, "Fireball", 1.5f, dist <= SpellRange,
-                        () => FireAt(boss.Unit, 42f, new Color(1f, 0.55f, 0.2f), "Fireball"));
+                    Cast(dt, "Fireball", 1.2f, dist <= SpellRange,
+                        () => FireAt(boss.Unit, 52f, new Color(1f, 0.55f, 0.2f), "Fireball"));
                     break;
                 case Role.Healer:
                     HealerTick(dt, boss, dist);
@@ -159,7 +159,7 @@ namespace ReadyCheck
         {
             if (CastName == "Heal" && healTarget != null && !healTarget.IsDead)
             {
-                Cast(dt, "Heal", 1.5f, InRange(healTarget, HealRange), DoHeal);
+                Cast(dt, "Heal", 1.3f, InRange(healTarget, HealRange), DoHeal);
                 return;
             }
 
@@ -167,14 +167,14 @@ namespace ReadyCheck
             if (target != null)
             {
                 healTarget = target;
-                Cast(dt, "Heal", 1.5f, InRange(target, HealRange), DoHeal);
+                Cast(dt, "Heal", 1.3f, InRange(target, HealRange), DoHeal);
                 if (target.HealthPercent < 0.3f && UnityEngine.Random.value < 0.01f)
                     Barks.Say(Unit, BarkLines.Pick(BarkLines.HealerPanic));
             }
             else
             {
-                Cast(dt, "Smite", 1.6f, distToBoss <= SpellRange,
-                    () => FireAt(boss.Unit, 12f, new Color(1f, 1f, 0.6f), "Smite"));
+                Cast(dt, "Smite", 1.4f, distToBoss <= SpellRange,
+                    () => FireAt(boss.Unit, 20f, new Color(1f, 1f, 0.6f), "Smite"));
             }
         }
 
@@ -182,8 +182,8 @@ namespace ReadyCheck
         {
             if (healTarget == null || healTarget.IsDead) return;
             var target = healTarget;
-            Projectile.Fire(Unit.Position + Vector3.up * 0.9f, target, new Color(0.5f, 1f, 0.5f), 18f,
-                () => target.Heal(170f, Unit));
+            Projectile.Fire(Unit.Position, target, new Color(0.5f, 1f, 0.5f), 18f,
+                () => target.Heal(230f, Unit));
         }
 
         bool InRange(Unit target, float range) => Vector3.Distance(Unit.Position, target.Position) <= range;
@@ -212,7 +212,7 @@ namespace ReadyCheck
         {
             float dmg = damage * DamageMultiplier();
             var source = Unit;
-            Projectile.Fire(Unit.Position + Vector3.up * 0.9f, target, color, 16f,
+            Projectile.Fire(Unit.Position, target, color, 18f,
                 () => target.TakeDamage(dmg, source, ability));
         }
 

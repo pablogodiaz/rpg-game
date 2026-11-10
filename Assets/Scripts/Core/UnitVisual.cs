@@ -1,50 +1,72 @@
+using System;
 using UnityEngine;
 
 namespace ReadyCheck
 {
     /// <summary>
-    /// 2.5D presentation for a unit: a camera-facing pixel sprite, a blob shadow on the ground,
-    /// a small walk bob, sprite flipping, hit flashes and a "lying down" pose when dead.
+    /// Top-down presentation for a unit. Sprites lie flat on the ground and are seen from above.
+    /// - Body rotates toward its aim (the boss in combat). Feet rotate toward movement and step while walking.
+    /// - Drop shadow: a dark copy of the body, offset down-left, that grows with height (leaps).
+    /// - Hit flash, a small explosion and a scorch mark on death.
     /// </summary>
     public class UnitVisual : MonoBehaviour
     {
+        static readonly Quaternion Flat = Quaternion.Euler(90f, 0f, 0f);
+
         public SpriteRenderer Body;
-        public Transform BodyPivot;
+        /// <summary>World units above the ground (used by leaps). Scales the body up and pushes the shadow out.</summary>
         public float HeightOffset;
         public Color BaseTint = Color.white;
+        /// <summary>Where the body should face. Return Vector3.zero to face the movement direction instead.</summary>
+        public Func<Vector3> AimDirection;
 
         Unit unit;
+        Transform bodyT, legsT, footL, footR, shadowT;
+        SpriteRenderer shadow, footLsr, footRsr, scorch;
+        float footSpread, stride;
+        float bodyYaw, legYaw, walkPhase;
         Vector3 lastPosition;
-        float walkPhase;
         float flashUntil;
         Color flashColor;
-        bool faceLeft;
+        bool deathShown;
 
-        public static UnitVisual Create(Unit unit, Sprite sprite, float shadowWidth)
+        public static UnitVisual Create(Unit unit, Sprite body, Sprite foot, float footSpread, float stride,
+            int sortingBase, float initialYaw)
         {
-            var pivot = new GameObject("Visual").transform;
-            pivot.SetParent(unit.transform, false);
+            var v = unit.gameObject.AddComponent<UnitVisual>();
+            v.unit = unit;
+            v.footSpread = footSpread;
+            v.stride = stride;
+            v.bodyYaw = v.legYaw = initialYaw;
+            v.lastPosition = unit.transform.position;
 
-            var bodyGo = new GameObject("Sprite");
-            bodyGo.transform.SetParent(pivot, false);
-            var sr = bodyGo.AddComponent<SpriteRenderer>();
+            v.legsT = new GameObject("Legs").transform;
+            v.legsT.SetParent(unit.transform, false);
+            v.footL = MakeFlat("FootL", v.legsT, foot, sortingBase - 1, out v.footLsr);
+            v.footR = MakeFlat("FootR", v.legsT, foot, sortingBase - 1, out v.footRsr);
+
+            v.shadowT = MakeFlat("Shadow", unit.transform, body, sortingBase - 3, out v.shadow);
+            v.shadow.color = new Color(0f, 0f, 0f, 0.35f);
+
+            v.bodyT = MakeFlat("Body", unit.transform, body, sortingBase, out v.Body);
+            v.bodyT.localPosition = new Vector3(0f, 0.03f, 0f);
+
+            MakeFlat("Scorch", unit.transform, PixelArt.Scorch(), sortingBase - 5, out v.scorch);
+            v.scorch.enabled = false;
+
+            v.LateUpdate();
+            return v;
+        }
+
+        static Transform MakeFlat(string name, Transform parent, Sprite sprite, int order, out SpriteRenderer sr)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localRotation = Flat;
+            sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = sprite;
-
-            var shadowGo = new GameObject("Shadow");
-            shadowGo.transform.SetParent(unit.transform, false);
-            shadowGo.transform.localPosition = new Vector3(0f, 0.03f, 0f);
-            shadowGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            shadowGo.transform.localScale = Vector3.one * shadowWidth;
-            var shadow = shadowGo.AddComponent<SpriteRenderer>();
-            shadow.sprite = PixelArt.Shadow();
-            shadow.sortingOrder = -5;
-
-            var visual = unit.gameObject.AddComponent<UnitVisual>();
-            visual.unit = unit;
-            visual.Body = sr;
-            visual.BodyPivot = pivot;
-            visual.lastPosition = unit.transform.position;
-            return visual;
+            sr.sortingOrder = order;
+            return go.transform;
         }
 
         public void Flash(Color color, float duration = 0.08f)
@@ -53,46 +75,71 @@ namespace ReadyCheck
             flashUntil = Time.time + duration;
         }
 
+        static float YawOf(Vector3 dir) => Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+
         void LateUpdate()
         {
-            var cam = CameraRig.MainCam;
-            var camRotation = cam != null ? cam.transform.rotation : Quaternion.identity;
-
+            float dt = Time.deltaTime;
             var pos = transform.position;
             var delta = pos - lastPosition;
+            delta.y = 0f;
             lastPosition = pos;
-            float speed = Time.deltaTime > 0f ? delta.magnitude / Time.deltaTime : 0f;
-
-            if (cam != null)
-            {
-                float side = Vector3.Dot(delta, cam.transform.right);
-                if (side > 0.0005f) faceLeft = false;
-                else if (side < -0.0005f) faceLeft = true;
-            }
-            Body.flipX = faceLeft;
+            float speed = dt > 0f ? delta.magnitude / dt : 0f;
 
             if (unit != null && unit.IsDead)
             {
-                BodyPivot.localPosition = new Vector3(0f, 0.12f, 0f);
-                BodyPivot.rotation = camRotation * Quaternion.Euler(0f, 0f, faceLeft ? -90f : 90f);
-                Body.color = new Color(0.55f, 0.55f, 0.6f, 0.9f);
+                ShowDeath();
                 return;
             }
 
-            float bob = 0f;
-            if (speed > 0.3f)
+            bool moving = speed > 0.3f;
+            if (moving)
             {
-                walkPhase += Time.deltaTime * 14f;
-                bob = Mathf.Abs(Mathf.Sin(walkPhase)) * 0.09f;
+                legYaw = Mathf.MoveTowardsAngle(legYaw, YawOf(delta), 720f * dt);
+                walkPhase += dt * Mathf.Clamp(speed, 2f, 8f) * 2.6f;
             }
             else
             {
-                walkPhase = 0f;
+                walkPhase = Mathf.MoveTowards(walkPhase, Mathf.Round(walkPhase / Mathf.PI) * Mathf.PI, dt * 6f);
             }
 
-            BodyPivot.localPosition = Vector3.up * (bob + HeightOffset);
-            BodyPivot.rotation = camRotation;
+            var aim = AimDirection != null ? AimDirection() : Vector3.zero;
+            aim.y = 0f;
+            if (aim.sqrMagnitude < 0.01f && moving) aim = delta;
+            if (aim.sqrMagnitude > 0.0001f) bodyYaw = Mathf.MoveTowardsAngle(bodyYaw, YawOf(aim), 540f * dt);
+
+            float step = Mathf.Sin(walkPhase) * stride;
+            legsT.localRotation = Quaternion.Euler(0f, legYaw, 0f);
+            footL.localPosition = new Vector3(-footSpread, 0.01f, step);
+            footR.localPosition = new Vector3(footSpread, 0.01f, -step);
+            footL.gameObject.SetActive(HeightOffset < 0.2f);
+            footR.gameObject.SetActive(HeightOffset < 0.2f);
+
+            float scale = 1f + HeightOffset * 0.12f;
+            var bodyRot = Quaternion.Euler(0f, bodyYaw, 0f) * Flat;
+            bodyT.rotation = bodyRot;
+            bodyT.localScale = Vector3.one * scale;
+
+            float shadowDist = 0.14f + HeightOffset * 0.35f;
+            shadowT.position = pos + new Vector3(-shadowDist * 0.7f, 0.005f, -shadowDist);
+            shadowT.rotation = bodyRot;
+            shadowT.localScale = Vector3.one * scale;
+
             Body.color = Time.time < flashUntil ? flashColor : BaseTint;
+        }
+
+        void ShowDeath()
+        {
+            if (deathShown) return;
+            deathShown = true;
+            Body.color = new Color(0.32f, 0.3f, 0.36f, 1f);
+            bodyT.localScale = Vector3.one * 0.9f;
+            footL.gameObject.SetActive(false);
+            footR.gameObject.SetActive(false);
+            shadow.enabled = false;
+            scorch.enabled = true;
+            scorch.transform.localScale = Vector3.one * Mathf.Max(1f, unit.Radius * 2.2f);
+            Telegraph.Flash(unit.Position, Mathf.Max(0.9f, unit.Radius * 2f), new Color(1f, 0.6f, 0.25f), 0.4f);
         }
     }
 }

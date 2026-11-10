@@ -21,7 +21,6 @@ namespace ReadyCheck
             TimeController.SetSlowMo(false);
 
             SetupCamera();
-            Arena.SetupLighting();
             Arena.Build();
 
             var root = new GameObject("ReadyCheck");
@@ -44,13 +43,12 @@ namespace ReadyCheck
             }
 
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.07f, 0.05f, 0.1f);
-            cam.fieldOfView = 32f;
-            cam.nearClipPlane = 0.3f;
-            cam.farClipPlane = 120f;
-            // Sort transparent sprites back-to-front along the world Z axis (good for a fixed 3/4 camera).
-            cam.transparencySortMode = TransparencySortMode.CustomAxis;
-            cam.transparencySortAxis = new Vector3(0f, 0f, 1f);
+            cam.backgroundColor = new Color(0.086f, 0.07f, 0.11f);
+            cam.orthographic = true;
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 100f;
+            // Everything is a flat sprite; draw order comes from each renderer's sortingOrder.
+            cam.transparencySortMode = TransparencySortMode.Orthographic;
 
             if (cam.GetComponent<CameraRig>() == null) cam.gameObject.AddComponent<CameraRig>();
         }

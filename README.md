@@ -1,8 +1,10 @@
 # Ready Check
 
-A 2.5D pixel-art raid-leader game. You lead a party through dungeon bosses, and your main weapon
+A top-down pixel-art raid-leader game (visual style inspired by Mindustry). You lead a party through dungeon bosses, and your main weapon
 is your voice: **Stack! Spread! Kick that cast! Burn it down!** Your party learns every fight with
 you, so each wipe makes the next pull better.
+
+![Mock frame of the Rotgut fight, composed from the game's generated sprites](docs/images/art-preview.png)
 
 Built in **Unity 6** for PC (gamepad-first, mouse and keyboard fully supported), with a Nintendo Switch port in mind.
 The full design is in [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md).
@@ -65,12 +67,12 @@ make sure `Scenes/Main` is in the scene list → **Build**. Run the resulting ex
 
 ## How to play (first iteration)
 
-You're the **Raid Leader** (the one with the gold ring and the banner). With your party of four, you fight
+You're the **Raid Leader** (the one with the crown and the gold ring under your feet). With your party of four, you fight
 **Rotgut the Hungry**, an ogre with poor table manners. He enrages at **3:00**.
 
 | Mechanic | What happens | Your call |
 |---|---|---|
-| **Belly Flop** | An orange circle appears under someone. Rotgut jumps on it and the damage is split between everyone inside. Fewer than 4 people means deaths. If nobody's inside, the whole raid gets hit. | Run into the circle and call **STACK** |
+| **Belly Flop** | An orange circle appears under someone. Rotgut jumps on it and the damage is split between everyone inside. Fewer than 3 people means deaths. If nobody's inside, the whole raid gets hit. | Run into the circle and call **STACK** |
 | **Indigestion** | Everyone gets a purple ring. When it pops, it damages every *other* member inside the ring. | Call **SPREAD**, then go to your **YOU** marker |
 | **Second Breakfast** | An interruptible cast (yellow cast bar). If he finishes eating, he heals and gets stronger (*Well Fed*). | Call **INTERRUPT** |
 | **Grease Fire** | Fire puddles appear under people. Members walk out on their own, but how fast depends on their **Awareness**. Grenn is a *Fire Enthusiast*... | Move out yourself |
@@ -88,7 +90,7 @@ first pull you have to call almost everything. A few wipes later, people start h
 | Move | Left stick | WASD / arrow keys |
 | Attack (Leader Bolt, auto-targets the boss) | RT (hold) | Left mouse / J (hold) |
 | Dodge (brief invulnerability) | A | Space |
-| Rally (+25% party damage, 2 min cooldown) | Y | R |
+| Rally (+30% party damage, 90 s cooldown) | Y | R |
 | **Quick Calls**: Stack / Spread / Interrupt / Burn | D-pad Up / Down / Left / Right | 1 / 2 / 3 / 4 |
 | Defensives / As You Were | Raid Wheel | 5 / 6 |
 | **Raid Wheel** (slows time to 20%) | Hold LB, aim with right stick, release to call | Hold Q or right mouse, move the mouse toward a call, release to call |
@@ -114,7 +116,7 @@ docs/GAME_DESIGN.md             game design document
 ```
 
 A few notes on this first iteration:
-- **Everything is generated from code**: sprites (palette-swapped pixel templates), the arena and the UI.
+- **Everything is generated from code**: top-down pixel sprites (outlined parts, palette swaps), the tile-map arena and the UI.
   That means there are no binary assets yet, so it's easy to review and diff. Real pixel art and prefabs
   replace these pieces over time.
 - **The HUD uses IMGUI** as a placeholder. A proper pixel-art UI comes later.

@@ -103,7 +103,7 @@ namespace ReadyCheck
             go.transform.position = position;
 
             var unit = go.AddComponent<Unit>();
-            unit.Init(profile.Name, Team.Party, profile.Role, profile.MaxHealth, 0.4f);
+            unit.Init(profile.Name, Team.Party, profile.Role, profile.MaxHealth, 0.5f);
 
             var member = go.AddComponent<PartyMember>();
             member.Profile = profile;
@@ -112,7 +112,10 @@ namespace ReadyCheck
             member.IsLeader = profile.Class == ClassKind.Leader;
             member.Familiarity = Familiarity.Get(RotgutBoss.BossId, profile.Name);
 
-            unit.Visual = UnitVisual.Create(unit, PixelArt.Character(profile), 0.9f);
+            var visual = UnitVisual.Create(unit, PixelArt.Character(profile), PixelArt.Foot(profile.Secondary, false),
+                0.3f, 0.22f, 10, 0f);
+            visual.AimDirection = () => AimAtBoss(unit);
+            unit.Visual = visual;
 
             if (member.IsLeader)
             {
@@ -120,11 +123,11 @@ namespace ReadyCheck
                 // Gold ring under the leader so you can always find yourself.
                 var ringGo = new GameObject("LeaderRing");
                 ringGo.transform.SetParent(go.transform, false);
-                ringGo.transform.localPosition = new Vector3(0f, 0.035f, 0f);
+                ringGo.transform.localPosition = new Vector3(0f, 0.002f, 0f);
                 ringGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                ringGo.transform.localScale = Vector3.one * 0.55f;
+                ringGo.transform.localScale = Vector3.one * 0.75f;
                 var sr = ringGo.AddComponent<SpriteRenderer>();
-                sr.sprite = PixelArt.Ring();
+                sr.sprite = PixelArt.RingSprite();
                 sr.color = new Color(1f, 0.85f, 0.3f, 0.9f);
                 sr.sortingOrder = -6;
             }
@@ -144,11 +147,20 @@ namespace ReadyCheck
             go.transform.position = position;
             var unit = go.AddComponent<Unit>();
             unit.Init(RotgutBoss.BossName, Team.Enemy, Role.Boss, RotgutBoss.MaxHealth, 1.6f);
-            var visual = UnitVisual.Create(unit, PixelArt.Boss(), 3.4f);
+            var visual = UnitVisual.Create(unit, PixelArt.Boss(), PixelArt.Foot(new Color32(112, 72, 52, 255), true),
+                0.95f, 0.35f, 20, 180f);
             unit.Visual = visual;
             var boss = go.AddComponent<RotgutBoss>();
             boss.Init(unit, visual);
+            visual.AimDirection = () => boss.FacingDirection;
             return boss;
+        }
+
+        /// <summary>Party members face the boss while fighting, otherwise the way they walk.</summary>
+        Vector3 AimAtBoss(Unit unit)
+        {
+            if (State != EncounterState.Fighting || Boss == null || Boss.Unit.IsDead) return Vector3.zero;
+            return Boss.Unit.Position - unit.Position;
         }
 
         void SetState(EncounterState state)

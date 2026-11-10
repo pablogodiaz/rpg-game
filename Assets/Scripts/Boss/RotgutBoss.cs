@@ -6,7 +6,7 @@ namespace ReadyCheck
 {
     /// <summary>
     /// Rotgut the Hungry, the first boss. Each mechanic teaches one call:
-    ///  - Belly Flop      → STACK     (split damage: needs 4+ people in the circle)
+    ///  - Belly Flop      → STACK     (split damage: needs 3+ people in the circle)
     ///  - Indigestion     → SPREAD    (everyone explodes on everyone near them)
     ///  - Second Breakfast→ INTERRUPT (heals him and stacks a damage buff if he finishes eating)
     ///  - Grease Fire     → move out of bad (handled by each member's Awareness)
@@ -28,7 +28,7 @@ namespace ReadyCheck
         const float FlopTelegraphTime = 4.5f;
         const float LeapDuration = 0.9f;
         const float IndigestionRadius = 4f;
-        const float IndigestionDamage = 260f;
+        const float IndigestionDamage = 300f;
         const float IndigestionDelay = 5f;
 
         public Unit Unit { get; private set; }
@@ -72,7 +72,7 @@ namespace ReadyCheck
             unit.Died += OnDied;
         }
 
-        float DamageScale => (1f + 0.2f * WellFedStacks) * (Phase2 ? 1.1f : 1f) * (Enraged ? 5f : 1f);
+        float DamageScale => (1f + 0.15f * WellFedStacks) * (Phase2 ? 1.1f : 1f) * (Enraged ? 5f : 1f);
 
         public void BeginFight(PartyMember tank)
         {
@@ -404,10 +404,10 @@ namespace ReadyCheck
 
         void CompleteBreakfast()
         {
-            Unit.Heal(Unit.MaxHealth * 0.06f, Unit);
+            Unit.Heal(Unit.MaxHealth * 0.04f, Unit);
             WellFedStacks++;
             Barks.Say(Unit, BarkLines.Pick(BarkLines.BossAte), 2.5f, true);
-            CommandSystem.Instance.Shout($"Rotgut is Well Fed x{WellFedStacks} (+{WellFedStacks * 20}% damage)",
+            CommandSystem.Instance.Shout($"Rotgut is Well Fed x{WellFedStacks} (+{WellFedStacks * 15}% damage)",
                 new Color(1f, 0.6f, 0.25f));
         }
 

@@ -2,7 +2,11 @@ using UnityEngine;
 
 namespace ReadyCheck
 {
-    /// <summary>Fixed 3/4 camera that follows the leader and leans toward the boss.</summary>
+    /// <summary>
+    /// Straight-down orthographic camera. The zoom is always a whole number of screen pixels per art pixel,
+    /// and the position snaps to the screen-pixel grid, so the pixel art stays crisp at any resolution.
+    /// Follows the leader and leans toward the boss.
+    /// </summary>
     public class CameraRig : MonoBehaviour
     {
         public static CameraRig Instance { get; private set; }
@@ -10,9 +14,15 @@ namespace ReadyCheck
 
         public Transform Target;
         public Transform SecondaryTarget;
-        public Vector3 Offset = new Vector3(0f, 13.5f, -11.5f);
         [Range(0f, 1f)] public float SecondaryWeight = 0.3f;
+        /// <summary>Roughly how many world units should fit vertically on screen.</summary>
+        public float TargetVisibleHeight = 19f;
+        public const float Height = 30f;
 
+        /// <summary>Screen pixels per art pixel.</summary>
+        public int Zoom { get; private set; } = 1;
+
+        Vector3 focus;
         float shakeUntil;
         float shakeStrength;
 
@@ -20,7 +30,9 @@ namespace ReadyCheck
         {
             Instance = this;
             MainCam = GetComponent<Camera>();
-            transform.rotation = Quaternion.LookRotation(-Offset.normalized, Vector3.up);
+            MainCam.orthographic = true;
+            transform.rotation = Quaternion.Euler(90f, 0f, 0f); // looking straight down, screen-up = +Z
+            UpdateZoom();
         }
 
         public static void Shake(float strength, float duration = 0.3f)
@@ -30,32 +42,50 @@ namespace ReadyCheck
             Instance.shakeUntil = Time.unscaledTime + duration;
         }
 
-        Vector3 Focus()
+        Vector3 DesiredFocus()
         {
             if (Target == null) return Vector3.zero;
-            var focus = Target.position;
-            if (SecondaryTarget != null) focus = Vector3.Lerp(focus, SecondaryTarget.position, SecondaryWeight);
-            focus.y = 0f;
-            return focus;
+            var f = Target.position;
+            if (SecondaryTarget != null) f = Vector3.Lerp(f, SecondaryTarget.position, SecondaryWeight);
+            f.y = 0f;
+            return f;
         }
 
         public void Snap()
         {
-            transform.position = Focus() + Offset;
+            focus = DesiredFocus();
+            Apply(Vector3.zero);
+        }
+
+        void UpdateZoom()
+        {
+            int h = Mathf.Max(1, Screen.height);
+            Zoom = Mathf.Max(1, Mathf.RoundToInt(h / (PixelArt.PPU * TargetVisibleHeight)));
+            MainCam.orthographicSize = h / (2f * PixelArt.PPU * Zoom);
+        }
+
+        void Apply(Vector3 shake)
+        {
+            var p = focus + shake;
+            float unit = 1f / (PixelArt.PPU * Zoom); // one screen pixel in world units
+            p.x = Mathf.Round(p.x / unit) * unit;
+            p.z = Mathf.Round(p.z / unit) * unit;
+            transform.position = new Vector3(p.x, Height, p.z);
+            transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         }
 
         void LateUpdate()
         {
-            var desired = Focus() + Offset;
+            UpdateZoom();
             float t = 1f - Mathf.Exp(-6f * Time.unscaledDeltaTime);
-            var pos = Vector3.Lerp(transform.position, desired, t);
+            focus = Vector3.Lerp(focus, DesiredFocus(), t);
+            var shake = Vector3.zero;
             if (Time.unscaledTime < shakeUntil)
             {
                 var r = Random.insideUnitCircle * shakeStrength;
-                pos += new Vector3(r.x, r.y, 0f);
+                shake = new Vector3(r.x, 0f, r.y);
             }
-            transform.position = pos;
-            transform.rotation = Quaternion.LookRotation(-Offset.normalized, Vector3.up);
+            Apply(shake);
         }
     }
 }

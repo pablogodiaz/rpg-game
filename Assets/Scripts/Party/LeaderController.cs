@@ -14,12 +14,12 @@ namespace ReadyCheck
             RaidCall.Burn, RaidCall.Defensives, RaidCall.AsYouWere,
         };
 
-        public const float AttackInterval = 0.55f;
+        public const float AttackInterval = 0.5f;
         public const float AttackRange = 12f;
-        public const float AttackDamage = 15f;
+        public const float AttackDamage = 24f;
         public const float DodgeCooldown = 5f;
         public const float DodgeDuration = 0.22f;
-        public const float RallyCooldown = 120f;
+        public const float RallyCooldown = 90f;
 
         public float DodgeReadyAt { get; private set; }
         public float RallyReadyAt { get; private set; }
@@ -115,8 +115,10 @@ namespace ReadyCheck
         {
             var cam = CameraRig.MainCam;
             if (cam == null) return new Vector3(stick.x, 0f, stick.y);
-            var forward = cam.transform.forward;
+            // Top-down camera: "forward" on the stick is screen-up.
+            var forward = cam.transform.up;
             forward.y = 0f;
+            if (forward.sqrMagnitude < 0.001f) forward = Vector3.forward;
             forward.Normalize();
             var right = cam.transform.right;
             right.y = 0f;
@@ -143,9 +145,9 @@ namespace ReadyCheck
             RallyReadyAt = Time.time + RallyCooldown;
             foreach (var member in enc.Party)
                 if (!member.Unit.IsDead)
-                    member.Unit.AddBuff("rally", "RALLY", BuffKind.DamageDone, 1.25f, 12f);
+                    member.Unit.AddBuff("rally", "RALLY", BuffKind.DamageDone, 1.3f, 12f);
             CombatLog.RecordCall("Rally");
-            CommandSystem.Instance.Shout("RALLY! (+25% damage)", new Color(1f, 0.85f, 0.3f));
+            CommandSystem.Instance.Shout("RALLY! (+30% damage)", new Color(1f, 0.85f, 0.3f));
             Barks.Say(m.Unit, BarkLines.Pick(BarkLines.Rally), 2f, true);
         }
 

@@ -8,9 +8,11 @@
 |---|---|
 | v0.2 | Real-time with **slow-mo while commanding** (no full pause in the default mode) |
 | v0.2 | Tone: **affectionate MMO-raid parody** |
-| v0.2 | Visual style: **2.5D pixel art** (pixel sprites in a 3D world) |
+| v0.2 | ~~Visual style: 2.5D pixel art (pixel sprites in a 3D world)~~ (replaced in v0.3) |
 | v0.2 | **Local co-op** as a later feature. The architecture has to allow it from day 1 |
 | v0.2 | Engine: **Unity 6 LTS** (URP), chosen for official Switch / Switch 2 support |
+| v0.3 | Visual style: **top-down pixel art inspired by Mindustry**: straight-down camera, outlined units seen from above |
+| v0.3 | Balance: party roughly 1.6–1.8x stronger (damage, health, heals). Rotgut slightly less punishing |
 
 ---
 
@@ -61,7 +63,7 @@ Someone who has never played an MMO should still find the characters funny.
 ## 3. Core gameplay
 
 ### 3.1 Perspective & time
-- **Fixed 3/4 camera** (about 45°, slight perspective) on a 3D world. Ground telegraphs (circles, cones, lines)
+- **Top-down orthographic camera** looking straight down (see section 6). Ground telegraphs (circles, cones, lines)
   stay easy to read, it works well with a controller, and it's cheap enough for Switch.
 - **Real-time with slow-mo while commanding.** Holding a command wheel slows the game to ~20%. When you let go, it
   goes back to full speed. There's no full pause in the default mode. That keeps the pressure on and makes good
@@ -216,26 +218,36 @@ Each boss is built around **one primary call** it teaches, then remixes old ones
 
 ---
 
-## 6. Art direction: 2.5D pixel art
+## 6. Art direction: top-down pixel art (Mindustry-inspired)
 
-**Pixel-art sprite characters and effects in a low-poly 3D environment** with modern lighting
-(the same family of look as Octopath Traveler or Eastward-style dioramas, but with our own identity).
+The reference is **Mindustry's readability**: a straight-down view, chunky outlined pixel sprites and clean
+glowing effects. All art is our own. We borrow the *approach*, never assets or exact designs.
 
-- **Characters:** 2D pixel sprites (~32–48 px tall) on camera-facing quads in the 3D world. Point-filtered,
-  no smoothing.
-- **Directions:** start with **4 directions + mirroring** (3 unique: up, down, side) to keep art cost
-  manageable. Upgrade to 8 only if movement looks bad.
-- **Character variety on a budget:** one sprite set per class + **palette swaps** and small accessories
-  (hats, capes) for individual members. The goofy hats are part of the parody.
-- **Environments:** simple 3D geometry with pixel-art textures. The 3D gives real depth, lighting, shadows
-  and verticality for free.
-- **Telegraphs:** drawn as **decals projected onto the ground** (URP Decal Projector) in a high-contrast,
-  colorblind-safe palette. They must always be readable over any floor texture.
-- **Post-processing (light):** bloom on spells, subtle depth of field / tilt-shift for the "diorama" feel.
-  Keep it optional on Switch.
-- **Pixel crispness:** either render the scene at a low internal resolution and upscale (very crisp, retro),
-  or render at full resolution with point-filtered sprites (smoother 3D, still pixel characters).
-  Prototype both in week 1. **[OPEN]**
+![Mock frame composed from the game's generated sprites](images/art-preview.png)
+
+*A mock frame put together from the sprites the game generates (lamp glows not to scale). It shows the
+party stacking in a Belly Flop circle while the tank holds Rotgut.*
+
+- **Camera:** orthographic, straight down. The zoom is always a whole number of screen pixels per art pixel,
+  and the camera snaps to the screen-pixel grid, so pixels stay crisp at any resolution.
+- **One pixel density:** every sprite is drawn at 12 px per world unit (one floor tile = 12 px), so pixels
+  line up across characters, floor and boss.
+- **Units seen from above:** the **body rotates to face its target** and **feet step underneath** in the
+  walking direction (instead of drawing 4–8 facing directions, which also saves a lot of art). Each part
+  (head, hands, gear, body) has its own **dark outline** and simple top-left bevel lighting.
+- **Silhouette = role:** the tank carries a tower shield in front, the healer a staff with a gem, the duelist
+  twin daggers, the mage a wide hat and an orb. The leader has a crown, a scepter and a cape.
+  **Team color** (warm yellow) marks the party's shoulder pads. Enemies get red accents (Rotgut's cuffs).
+- **Character variety on a budget:** one body per class plus **palette swaps**. Goofy hats are still part of the parody.
+- **Shadows:** a dark, offset copy of the sprite (down-left). During a leap it grows and moves further out,
+  which sells height without 3D.
+- **Environment:** tile maps with metal floor plates, panels and vents, ringed by beveled rock walls that cast
+  shadows. Lamps set into the walls throw soft pools of light.
+- **Effects:** smooth (not pixelated) shapes, just like vector effects. Telegraph circles that fill up, shockwave rings on
+  impacts, bright bullets with a white-hot core and a short trail, a scorch mark where someone went down.
+  Telegraph colors are high-contrast and must stay readable over any floor.
+- **Upgrade path:** move to **URP's 2D Renderer** for real 2D lights (lamps, bullet glow, spell flashes) and
+  hand-made sprite sheets that replace the generated sprites one by one.
 
 ---
 
@@ -321,11 +333,11 @@ and build for it. Starting in Unity means no engine migration and no third-party
 ### Stack
 | Area | Choice |
 |---|---|
-| Render pipeline | **URP** (Universal Render Pipeline). Scales from Switch to PC, supports decals for telegraphs |
+| Render pipeline | **URP with the 2D Renderer** (2D lights for glows). Scales from Switch to PC |
 | Input | **Input System** package (action maps, rebinding, per-player devices for co-op) |
 | Camera | **Cinemachine** (follow, group framing for co-op) |
 | Data | **ScriptableObjects** for classes, abilities, bosses, traits, loot, barks |
-| Sprites | Sprites on quads with a billboard script, 2D Sprite/Animation tools, point filtering |
+| Sprites | Flat top-down sprites with rotation, 2D Sprite/Animation tools, point filtering, pixel-perfect camera |
 | Language | C# |
 | Version control | Git (+ Git LFS for art/audio once binaries get large) |
 
@@ -357,22 +369,22 @@ A first playable version of the core loop, built entirely from code (no imported
 - Party AI with the Awareness stat plus **Boss Familiarity saved between sessions**.
 - Traits with effects: Fire Enthusiast, Clutch, Backseat Leader. Tilt-Prone is flavor only for now.
 - Parody barks, a Ready Check → pull → wipe/victory loop, a post-fight report with joke awards, and joke loot.
-- Procedural 2.5D pixel art (palette-swapped character templates, billboard sprites in a 3D arena).
+- Procedural top-down pixel art (outlined parts, rotating bodies with stepping feet, tile-map arena, shadows,
+  bullets with trails). Iteration 1 shipped with a 2.5D billboard look, and this replaced it in v0.3.
 
 Known shortcuts to revisit: IMGUI HUD (placeholder), built-in render pipeline instead of URP, plain-data
 roster instead of ScriptableObjects, PlayerPrefs saves.
 
 ### Next up (suggested)
 1. Playtest and tune Rotgut (damage numbers, timings, Awareness/Familiarity curve).
-2. Move to URP, then decal telegraphs and the pixel-crispness test (section 6).
+2. Move to URP with the 2D Renderer and 2D lights (section 6).
 3. Data: move classes, abilities, traits and bosses into ScriptableObjects.
 4. Bosses 2–3 (Sister Vell, Gravemaw) and markers (Skull/X), which completes the vertical slice.
 
 **Milestone 0: Tech prototype (1–2 weeks)**
 - Unity 6 URP project, Input System set up for gamepad + KBM
-- Billboarded pixel sprite moving in a 3D test room, fixed 3/4 camera
-- Test both pixel-crispness approaches (section 6)
-- A ground decal telegraph and a dummy enemy
+- Top-down pixel sprite moving on a tile map, pixel-perfect orthographic camera
+- A ground telegraph and a dummy enemy
 
 **Milestone 1: Vertical slice** (prove the core is fun):
 - 1 dungeon, 3 trash packs, **3 bosses** (Rotgut, Sister Vell, Gravemaw)
@@ -396,5 +408,4 @@ campaign content → **local co-op** → Switch performance pass and certificati
    sulking and won't raid this week".)
 4. **Story frame:** why are you raiding? Saving the realm, or just trying to get your guild to #1 on the
    rankings?
-5. **Pixel crispness approach** (section 6). Decide after the prototype.
-6. **Co-op slow-mo** behavior (section 8). Decide after playtesting.
+5. **Co-op slow-mo** behavior (section 8). Decide after playtesting.

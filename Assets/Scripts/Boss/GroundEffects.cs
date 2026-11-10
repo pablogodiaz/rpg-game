@@ -52,16 +52,14 @@ namespace ReadyCheck
             t.fill.sprite = PixelArt.Disc();
             t.fill.sortingOrder = -10;
 
-            if (!flash)
-            {
-                var ringGo = new GameObject("Ring");
-                ringGo.transform.SetParent(go.transform, false);
-                ringGo.transform.localPosition = Vector3.up * 0.01f;
-                ringGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                t.ring = ringGo.AddComponent<SpriteRenderer>();
-                t.ring.sprite = PixelArt.Ring();
-                t.ring.sortingOrder = -9;
-            }
+            var ringGo = new GameObject("Ring");
+            ringGo.transform.SetParent(go.transform, false);
+            ringGo.transform.localPosition = Vector3.up * 0.01f;
+            ringGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            t.ring = ringGo.AddComponent<SpriteRenderer>();
+            t.ring.sprite = PixelArt.RingSprite();
+            t.ring.sortingOrder = flash ? 45 : -9;
+            if (flash) t.fill.sortingOrder = 44;
             t.Update();
             return t;
         }
@@ -84,8 +82,11 @@ namespace ReadyCheck
 
             if (isFlash)
             {
-                fill.transform.localScale = Vector3.one * Mathf.Lerp(0.6f, 1.1f, t);
-                fill.color = new Color(color.r, color.g, color.b, (1f - t) * 0.8f);
+                // Shockwave: an expanding ring over a quickly fading flash.
+                fill.transform.localScale = Vector3.one * Mathf.Lerp(0.5f, 0.9f, t);
+                fill.color = new Color(color.r, color.g, color.b, (1f - t) * (1f - t) * 0.55f);
+                ring.transform.localScale = Vector3.one * Mathf.Lerp(0.4f, 1.15f, t);
+                ring.color = new Color(color.r, color.g, color.b, 1f - t);
             }
             else
             {
@@ -104,7 +105,7 @@ namespace ReadyCheck
     {
         public const string AbilityName = "Grease Fire";
         public const float TickInterval = 0.5f;
-        public const float TickDamage = 35f;
+        public const float TickDamage = 30f;
         public const int MaxPuddles = 8;
 
         public static readonly List<FirePuddle> All = new List<FirePuddle>();
@@ -133,12 +134,10 @@ namespace ReadyCheck
             if (enc != null && enc.Root != null) go.transform.SetParent(enc.Root, false);
             go.transform.position = new Vector3(pos.x, 0.04f, pos.z);
             go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            go.transform.localScale = Vector3.one * radius;
-
             var p = go.AddComponent<FirePuddle>();
             p.Radius = radius;
             p.source = source;
-            p.frames = PixelArt.FireFrames();
+            p.frames = PixelArt.FireFrames(radius);
             p.sr = go.AddComponent<SpriteRenderer>();
             p.sr.sprite = p.frames[0];
             p.sr.sortingOrder = -8;
@@ -166,9 +165,9 @@ namespace ReadyCheck
         void Update()
         {
             float age = Time.time - bornAt;
-            sr.sprite = frames[Mathf.FloorToInt(Time.time * 6f) % frames.Length];
+            sr.sprite = frames[Mathf.FloorToInt(Time.time * 8f) % frames.Length];
             float grow = Mathf.Clamp01(age / 0.4f);
-            transform.localScale = Vector3.one * Radius * Mathf.Lerp(0.3f, 1f, grow);
+            transform.localScale = Vector3.one * Mathf.Lerp(0.3f, 1f, grow);
             float fade = Mathf.Clamp01(expiresAt - Time.time);
             sr.color = new Color(1f, 1f, 1f, fade);
 

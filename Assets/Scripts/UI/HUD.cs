@@ -180,8 +180,8 @@ namespace ReadyCheck
             foreach (var b in Barks.Active)
             {
                 if (b.Unit == null) continue;
-                float height = b.Unit.Role == Role.Boss ? 4.8f : 2.1f;
-                if (!WorldToGui(b.Unit.Position + Vector3.up * height, out var g)) continue;
+                float above = b.Unit.Role == Role.Boss ? 2.6f : 0.95f;
+                if (!WorldToGui(b.Unit.Position + Vector3.forward * above, out var g)) continue;
                 var content = new GUIContent(b.Text);
                 float w = Mathf.Min(190f, bubble.CalcSize(content).x + 14f);
                 float h = bubble.CalcHeight(content, w - 10f) + 8f;
@@ -326,8 +326,8 @@ namespace ReadyCheck
                 case MechanicKind.BellyFlop:
                     string who = e.Target != null ? e.Target.DisplayName : "someone";
                     text = who == "You"
-                        ? $"BELLY FLOP on YOU! Stay in the orange circle and call STACK [{glyph}] so 4+ people share the hit."
-                        : $"BELLY FLOP on {who}! Run into the orange circle and call STACK [{glyph}] so 4+ people share the hit.";
+                        ? $"BELLY FLOP on YOU! Stay in the orange circle and call STACK [{glyph}] so 3+ people share the hit."
+                        : $"BELLY FLOP on {who}! Run into the orange circle and call STACK [{glyph}] so 3+ people share the hit.";
                     break;
                 case MechanicKind.Indigestion:
                     text = $"INDIGESTION! Everyone is about to explode. Call SPREAD [{glyph}] and go to your YOU spot.";
@@ -429,13 +429,13 @@ namespace ReadyCheck
             string[] controls = input.UsingGamepad
                 ? new[]
                 {
-                    "Left stick: move     RT: attack     A: dodge     Y: Rally (+25% party damage)",
+                    "Left stick: move     RT: attack     A: dodge     Y: Rally (+30% party damage)",
                     "D-pad: Quick Calls (Up Stack, Down Spread, Left Interrupt, Right Burn)",
                     "Hold LB: Raid Wheel (slow-mo), aim with right stick, release to call",
                 }
                 : new[]
                 {
-                    "WASD: move     LMB / J: attack     Space: dodge     R: Rally (+25% party damage)",
+                    "WASD: move     LMB / J: attack     Space: dodge     R: Rally (+30% party damage)",
                     "1-6: calls (Stack, Spread, Interrupt, Burn, Defensives, As You Were)",
                     "Hold Q or RMB: Raid Wheel (slow-mo), move the mouse toward a call, release to call",
                 };
